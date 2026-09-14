@@ -3,8 +3,8 @@ package com.levelup.testgraph.index;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 
-public final class MethodResolver {
-    private MethodResolver() {
+public final class MethodIdResolver {
+    private MethodIdResolver() {
     }
 
     public static String resolve(String typeName, MethodDeclaration methodDeclaration) {
