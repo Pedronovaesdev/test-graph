@@ -26,9 +26,14 @@ MVN_CMD="${MVN_CMD:-mvn}"
 cd "$TARGET_DIR"
 
 CHANGED_FILES="$(mktemp)"
-trap 'rm -f "$CHANGED_FILES"' EXIT
+# Armazena o diff completo
+DIFF_FILE="$(mktemp)"
+# Remove os arquivos temporarios ao sair, mesmo em caso de erro
+trap 'rm -f "$CHANGED_FILES" "$DIFF_FILE"' EXIT
 
 git diff --name-only "$BASE_REF" "$HEAD_REF" -- '*.java' > "$CHANGED_FILES"
+# Armazena o diff completo, com 0 linhas de contexto, para o caso de precisar depurar
+git diff --unified=0 "$BASE_REF" "$HEAD_REF" -- '*.java' > "$DIFF_FILE"
 
 if [ ! -s "$CHANGED_FILES" ]; then
   echo "Nenhum arquivo .java alterado entre $BASE_REF e $HEAD_REF. Nada a testar."
