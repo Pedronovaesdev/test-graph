@@ -43,7 +43,7 @@ public final class AstIndexer {
             typeSolver.add(new JavaParserTypeSolver(root));
         }
         JavaSymbolSolver symbolSolver = new JavaSymbolSolver(typeSolver);
-        ParserConfiguration config = new ParserConfiguration().setSymbolResolver(symbolSolver);
+        ParserConfiguration config = new ParserConfiguration().setSymbolResolver(symbolSolver).setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
         StaticJavaParser.setConfiguration(config);
 
         DependencyGraph graph = new DependencyGraph();
@@ -96,7 +96,34 @@ public final class AstIndexer {
                         String callee = resolved.declaringType().getQualifiedName();
                         graph.addEdge(typeName, callee);
                     }));
+
+            // Adiciona nós e arestas para cada método, resolvendo chamadas de método
+            type.getMethods().forEach(method -> {
+                String callerMethod =
+                        MethodIdResolver.resolve(typeName, method);
+                graph.addMethodNode(callerMethod);
+
+                if (isTestMethod(method)) {
+                    graph.markMethodAsTest(callerMethod, typeName);
+                }
+
+                method.findAll(MethodCallExpr.class)
+                        .forEach(call ->
+                                resolveSafely(call::resolve)
+                                        .ifPresent(resolved -> {
+                                            String calleeMethod = resolved.getQualifiedSignature();
+                                            graph.addMethodEdge(callerMethod, calleeMethod);
+                                        })
+                        );
+            });
         });
+    }
+
+    // Retorna o nome qualificado do método, ou uma representação simples se não for possível resolver.
+    private String resolveMethodName(String typeName, MethodDeclaration method) {
+        return resolveSafely(method::resolve)
+                .map(ResolvedMethodDeclaration::getQualifiedSignature)
+                .orElseGet(() -> typeName + "." + method.getSignature().asString());
     }
 
     private void addTypeEdge(DependencyGraph graph, String from, ResolvedType resolvedType) {
