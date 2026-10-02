@@ -19,7 +19,7 @@ qualquer repo Maven/Gradle existente, sem migrar nada.
 ## Arquitetura
 
 ```
-scripts/select-tests.sh          # CLI shell: git diff -> chama o jar -> mvn test -Dtest=...
+scripts/select-tests.sh          # CLI shell: valida Git -> diff -> seleção -> Maven (ou fallback completo)
 src/main/java/.../graph/          DependencyGraph.java   # grafo dirigido (JGraphT)
 src/main/java/.../index/          AstIndexer.java         # AST -> grafo (JavaParser + Symbol Solver)
 src/main/java/.../select/         TestSelector.java       # travessia reversa -> testes afetados
@@ -74,12 +74,19 @@ git add -A && git commit -q -m "mudanca em Calculator"
 
 ../../scripts/select-tests.sh HEAD~1 HEAD .
 # esperado: seleciona so CalculatorTest, nao LoggerTest
+
+# inspeciona a decisao sem executar os testes
+../../scripts/select-tests.sh HEAD~1 HEAD . --dry-run
 ```
 
 ## Limitações conhecidas
 
 - Assume layout Maven padrão (`src/main/java`, `src/test/java`) para mapear
   caminho de arquivo → nome totalmente qualificado da classe.
+- O script exige refs Git válidas, um repositório Git e `pom.xml`; tenta usar
+  `mvn` e recorre a `./mvnw` quando Maven não está no PATH. Mudanças em arquivos
+  não Java, remoções e renomeações acionam a suíte completa como fallback seguro.
+  `--dry-run` mostra o comando Maven que seria executado sem rodá-lo.
 - Chamadas via reflection, dependency injection (Spring, CDI) e interfaces
   dinâmicas não são resolvidas — o grafo fica incompleto nesses casos (falso
   negativo: um teste afetado pode não ser selecionado). Documentar isso é
