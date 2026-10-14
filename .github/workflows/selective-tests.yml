@@ -1,0 +1,229 @@
+name: Selective tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  GRAPHIFY_VERSION: "0.9.90"
+  NODE_VERSION: "20"
+
+jobs:
+  # Testes da propria ferramenta (seletor em TypeScript + Jest).
+  tool-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: selector
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: selector/package-lock.json
+      - run: npm ci
+      - run: npm test -- --ci
+      - run: npm run build
+
+  # Referencia: a suite inteira, sempre.
+  full-suite:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - demo: typescript
+            lang: typescript
+            project: demo/ts-project
+          - demo: java
+            lang: java
+            project: demo/java-project
+          - demo: java-gradle
+            lang: java-gradle
+            project: demo/java-gradle-project
+          - demo: python
+            lang: python
+            project: demo/python-project
+          - demo: spring
+            lang: java-gradle
+            project: demo/spring-project
+    steps:
+      - uses: actions/checkout@v4
+      # Bit de execucao se perde em commits feitos no Windows.
+      - run: chmod +x select-tests.sh selector/bin/select-tests.sh demo/*.sh demo/*/gradlew
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-python@v5
+        if: matrix.lang == 'python'
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        if: startsWith(matrix.lang, 'java')
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Instalar dependencias do projeto
+        if: matrix.lang == 'typescript'
+        working-directory: ${{ matrix.project }}
+        run: npm ci
+      - name: Instalar dependencias do projeto (python)
+        if: matrix.lang == 'python'
+        working-directory: ${{ matrix.project }}
+        run: pip install -r requirements.txt
+      - name: Suite completa
+        working-directory: ${{ matrix.project }}
+        run: |
+          start=$(date +%s)
+          case "${{ matrix.lang }}" in
+            typescript) npx jest --ci ;;
+            java) mvn -q test ;;
+            java-gradle) ./gradlew test --console=plain -q ;;
+            python) python -m pytest -q ;;
+          esac
+          echo "$(( $(date +%s) - start ))" > "$RUNNER_TEMP/seconds"
+      - name: Guardar tempo
+        if: always()
+        run: |
+          mkdir -p timing
+          echo "{\"demo\":\"${{ matrix.demo }}\",\"job\":\"full\",\"seconds\":$(cat "$RUNNER_TEMP/seconds" 2>/dev/null || echo null)}" > timing/full-${{ matrix.demo }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: timing-full-${{ matrix.demo }}
+          path: timing/
+
+  # So os testes afetados pelo diff, com explicacao.
+  selective:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - demo: typescript
+            lang: typescript
+            project: demo/ts-project
+          - demo: java
+            lang: java
+            project: demo/java-project
+          - demo: java-gradle
+            lang: java-gradle
+            project: demo/java-gradle-project
+          - demo: python
+            lang: python
+            project: demo/python-project
+          - demo: spring
+            lang: java-gradle
+            project: demo/spring-project
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # sem o historico completo o git diff base...head falha
+      # Bit de execucao se perde em commits feitos no Windows.
+      - run: chmod +x select-tests.sh selector/bin/select-tests.sh demo/*.sh demo/*/gradlew
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: actions/setup-java@v4
+        if: startsWith(matrix.lang, 'java')
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Instalar o indexador AST (graphify)
+        run: pip install -r requirements.txt
+      - name: Compilar o seletor
+        working-directory: selector
+        run: npm ci && npm run build
+      - name: Instalar dependencias do projeto
+        if: matrix.lang == 'typescript'
+        working-directory: ${{ matrix.project }}
+        run: npm ci
+      - name: Instalar dependencias do projeto (python)
+        if: matrix.lang == 'python'
+        working-directory: ${{ matrix.project }}
+        run: pip install -r requirements.txt
+      # Cache por arquivo do graphify (hash de conteudo). O grafo em si e
+      # sempre regerado para o commit analisado; so a extracao por arquivo e
+      # reaproveitada.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ matrix.project }}/graphify-out
+          key: graphify-${{ runner.os }}-${{ env.GRAPHIFY_VERSION }}-${{ matrix.demo }}-${{ github.sha }}
+          restore-keys: |
+            graphify-${{ runner.os }}-${{ env.GRAPHIFY_VERSION }}-${{ matrix.demo }}-
+            graphify-${{ runner.os }}-${{ env.GRAPHIFY_VERSION }}-
+      - name: Definir base do diff
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          # push de branch nova (before = 000...) ou commit inexistente: usa o pai.
+          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            base="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
+          fi
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+      - name: Testes seletivos
+        run: |
+          start=$(date +%s)
+          ./select-tests.sh \
+            --project "${{ matrix.project }}" \
+            --lang "${{ matrix.lang }}" \
+            --base "${{ steps.base.outputs.sha }}" \
+            --head HEAD
+          echo "$(( $(date +%s) - start ))" > "$RUNNER_TEMP/seconds"
+      - name: Guardar tempo e relatorio
+        if: always()
+        run: |
+          mkdir -p timing
+          report="${{ matrix.project }}/.selector-out/report.json"
+          if [ -f "$report" ]; then cp "$report" "timing/report-${{ matrix.demo }}.json"; fi
+          echo "{\"demo\":\"${{ matrix.demo }}\",\"job\":\"selective\",\"seconds\":$(cat "$RUNNER_TEMP/seconds" 2>/dev/null || echo null)}" > timing/selective-${{ matrix.demo }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: timing-selective-${{ matrix.demo }}
+          path: timing/
+
+  compare:
+    needs: [full-suite, selective]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: timing-*
+          merge-multiple: true
+          path: timing
+      - name: Comparacao no Job Summary
+        run: |
+          {
+            echo "## Suite completa vs seletiva"
+            echo
+            echo "| Demo | Modo | Testes executados | Tempo completo | Tempo seletivo |"
+            echo "|---|---|---|---|---|"
+            for demo in typescript java java-gradle python spring; do
+              full=$(jq -r '.seconds // "?"' "timing/full-$demo.json" 2>/dev/null || echo "?")
+              sel=$(jq -r '.seconds // "?"' "timing/selective-$demo.json" 2>/dev/null || echo "?")
+              if [ -f "timing/report-$demo.json" ]; then
+                mode=$(jq -r .mode "timing/report-$demo.json")
+                tests=$(jq -r '"\(.summary.selected) de \(.summary.total) (\(.summary.saved_percent)% economizado)"' "timing/report-$demo.json")
+              else
+                mode="fail-safe"; tests="suite completa"
+              fi
+              echo "| $demo | $mode | $tests | ${full}s | ${sel}s |"
+            done
+            echo
+            echo "O tempo seletivo inclui indexacao AST e selecao. Detalhes de cada teste escolhido estao no summary do job \`selective\`."
+          } >> "$GITHUB_STEP_SUMMARY"
