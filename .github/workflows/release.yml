@@ -1,12 +1,13 @@
 name: Release (npm)
 
-# Publica o pacote no npm quando voce cria uma tag de versao:
+# Publica o pacote no npm. So roda quando disparado A MAO (aba Actions ->
+# "Release (npm)" -> "Run workflow", escolhendo uma tag): as tags v* tambem
+# versionam a GitHub Action, e criar uma tag nao deve publicar no npm sozinho.
 #   cd selector && npm version 1.0.1 --no-git-tag-version
 #   git commit -am "v1.0.1" && git tag v1.0.1 && git push --follow-tags
 # Requer o secret NPM_TOKEN (token "Automation" do npmjs.com) no repositorio.
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -25,6 +26,9 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - name: Conferir versao da tag
         run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "Rode este workflow a partir de uma tag (ex.: v1.0.0), nao de uma branch."; exit 1
+          fi
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(node -p "require('./package.json').version")"
           if [ "$tag" != "$pkg" ]; then

@@ -99,7 +99,8 @@ test-graph-selector/
 │
 ├── .github/workflows/
 │   ├── selective-tests.yml         CI: testa a ferramenta e os 5 demos
-│   └── release.yml                 publica o pacote no npm a cada tag v*
+│   ├── release.yml                 publica o pacote no npm (disparo manual)
+│   └── action-selftest.yml         testa a GitHub Action (action.yml) com uses: ./
 │
 ├── docs/ARQUITETURA.md             este documento
 └── legacy/                         versão antiga (motor em Java). Não é usada.
@@ -675,7 +676,9 @@ montar a tabela.
 
 ### 10.2 `release.yml`: publicação no npm
 
-Dispara quando você envia uma tag `v*` (ex.: `v1.0.1`):
+Dispara **só manualmente** (aba *Actions* → *Release (npm)* → *Run workflow*,
+escolhendo uma tag). As tags `v*` também versionam a GitHub Action, então criar
+uma tag não publica nada sozinha. O workflow:
 
 1. confere se a versão da tag é a mesma do `selector/package.json`;
 2. `npm ci` e `npm test`;

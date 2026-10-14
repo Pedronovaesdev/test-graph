@@ -203,8 +203,10 @@ cd selector && npm version 1.0.1 --no-git-tag-version && cd ..
 git commit -am "v1.0.1" && git tag v1.0.1 && git push --follow-tags
 ```
 
-O workflow `.github/workflows/release.yml` confere se a tag bate com o
-`package.json`, roda os testes e publica. Para testar o pacote sem publicar:
+Depois, na aba *Actions* → **Release (npm)** → *Run workflow*, escolha a tag. A
+publicação é manual de propósito: as tags também versionam a GitHub Action, e
+criar uma tag não publica nada no npm sozinha. O workflow confere se a tag bate
+com o `package.json`, roda os testes e publica. Para testar o pacote sem publicar:
 `cd selector && npm pack` gera o `.tgz`, e `npm install -g ./test-graph-selector-1.0.0.tgz` o instala.
 
 ### Na pipeline deste repositório (GitHub Actions)
@@ -519,7 +521,9 @@ demo/
   compare.sh                    completo × seletivo em N commits
   prove-safety.sh               bug injetado é pego por um teste selecionado
 .github/workflows/selective-tests.yml
-.github/workflows/release.yml   publica no npm a cada tag v*
+.github/workflows/release.yml   publica no npm (disparo manual)
+.github/workflows/action-selftest.yml  testa a GitHub Action com uses: ./
+action.yml                      a GitHub Action (uses: Pedronovaesdev/test-graph@v1)
 requirements.txt                indexador AST (graphifyy==0.9.90)
 legacy/                         implementação anterior (motor Java/JGraphT), não usada
 ```
