@@ -1,0 +1,132 @@
+name: "test-graph-selector"
+description: "Roda so os testes afetados pelo diff (grafo de dependencias via AST), explicando por que cada um foi escolhido."
+author: "Pedronovaesdev"
+branding:
+  icon: "filter"
+  color: "blue"
+
+inputs:
+  base:
+    description: "Commit de comparacao. Vazio = base do PR (pull_request) ou commit anterior ao push."
+    required: false
+    default: ""
+  head:
+    description: "Commit analisado."
+    required: false
+    default: "HEAD"
+  project:
+    description: "Pasta do projeto dentro do repositorio (monorepo)."
+    required: false
+    default: "."
+  lang:
+    description: "typescript, vitest, java, java-gradle ou python. Vazio = detecta pelo arquivo de build."
+    required: false
+    default: ""
+  dry-run:
+    description: "true = so seleciona e explica, sem rodar os testes."
+    required: false
+    default: "false"
+  graphify-version:
+    description: "Versao do indexador AST (graphifyy no PyPI)."
+    required: false
+    default: "0.9.90"
+
+outputs:
+  mode:
+    description: "selective, full, none ou fail-safe."
+    value: ${{ steps.run.outputs.mode }}
+  selected:
+    description: "Quantos testes foram selecionados."
+    value: ${{ steps.run.outputs.selected }}
+  total:
+    description: "Quantos testes existem no projeto."
+    value: ${{ steps.run.outputs.total }}
+  report:
+    description: "Caminho do report.json."
+    value: ${{ steps.run.outputs.report }}
+
+runs:
+  using: "composite"
+  steps:
+    # O graphify vai num venv proprio: nao mexe no Python do projeto e evita o
+    # bloqueio de "pip install" global do Ubuntu 24.04 (PEP 668).
+    - name: Instalar o indexador AST (graphify)
+      shell: bash
+      env:
+        GRAPHIFY_VERSION: ${{ inputs.graphify-version }}
+      run: |
+        python3 -m venv "$RUNNER_TEMP/tgs-venv"
+        "$RUNNER_TEMP/tgs-venv/bin/pip" install --quiet "graphifyy==$GRAPHIFY_VERSION"
+        echo "GRAPHIFY=$RUNNER_TEMP/tgs-venv/bin/graphify" >> "$GITHUB_ENV"
+
+    # Usa o Node que ja estiver no runner (nao troca a versao do projeto).
+    - name: Compilar o seletor
+      shell: bash
+      working-directory: ${{ github.action_path }}/selector
+      run: |
+        command -v node >/dev/null || { echo "::error::Node.js nao encontrado. Adicione actions/setup-node antes desta Action."; exit 2; }
+        npm ci --silent --no-audit --no-fund
+        npm run build --silent
+
+    - name: Definir a base da comparacao
+      id: base
+      shell: bash
+      env:
+        INPUT_BASE: ${{ inputs.base }}
+        EVENT_NAME: ${{ github.event_name }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PUSH_BEFORE: ${{ github.event.before }}
+      run: |
+        base="$INPUT_BASE"
+        if [ -z "$base" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ] || [ "$EVENT_NAME" = "pull_request_target" ]; then
+            base="$PR_BASE"
+          else
+            base="$PUSH_BEFORE"
+          fi
+        fi
+        if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+          if git rev-parse --verify --quiet HEAD~1 >/dev/null; then
+            echo "::notice::Base '$base' indisponivel; comparando com HEAD~1. Use actions/checkout com fetch-depth: 0."
+            base="$(git rev-parse HEAD~1)"
+          else
+            echo "::warning::Sem historico para comparar (checkout raso?). Use actions/checkout com fetch-depth: 0."
+            base="$(git rev-parse HEAD)"
+          fi
+        fi
+        echo "sha=$base" >> "$GITHUB_OUTPUT"
+
+    - name: Testes seletivos
+      id: run
+      shell: bash
+      env:
+        TGS: ${{ github.action_path }}/selector/bin/select-tests.sh
+        BASE: ${{ steps.base.outputs.sha }}
+        HEAD_REF: ${{ inputs.head }}
+        PROJECT: ${{ inputs.project }}
+        LANG_INPUT: ${{ inputs.lang }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        args=(--base "$BASE" --head "$HEAD_REF" --project "$PROJECT")
+        [ -n "$LANG_INPUT" ] && args+=(--lang "$LANG_INPUT")
+        [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+        out="$PROJECT/.selector-out"
+        rm -rf "$out"
+
+        set +e
+        bash "$TGS" "${args[@]}"
+        code=$?
+        set -e
+
+        report="$out/report.json"
+        if [ -f "$report" ]; then
+          node -e '
+            const r = require(require("path").resolve(process.argv[1]));
+            const lines = [`mode=${r.mode}`, `selected=${r.summary.selected}`, `total=${r.summary.total}`];
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, lines.join("\n") + "\n");
+          ' "$report"
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+        else
+          echo "mode=fail-safe" >> "$GITHUB_OUTPUT"
+        fi
+        exit $code

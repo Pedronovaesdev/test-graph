@@ -1,0 +1,58 @@
+name: Action self-test
+
+# Testa a GitHub Action (action.yml na raiz) do jeito que outro repositorio
+# a usaria: so checkout + setup da linguagem + `uses:`.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  action:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - demo: typescript
+            project: demo/ts-project
+          - demo: python
+            project: demo/python-project
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Dependencias do demo (typescript)
+        if: matrix.demo == 'typescript'
+        working-directory: ${{ matrix.project }}
+        run: npm ci
+      - uses: actions/setup-python@v5
+        if: matrix.demo == 'python'
+        with:
+          python-version: "3.12"
+      - name: Dependencias do demo (python)
+        if: matrix.demo == 'python'
+        working-directory: ${{ matrix.project }}
+        run: pip install -r requirements.txt
+
+      # Em outro repositorio: `uses: Pedronovaesdev/test-graph@v1`
+      - id: tgs
+        uses: ./
+        with:
+          project: ${{ matrix.project }}
+
+      - name: Conferir as saidas da Action
+        env:
+          MODE: ${{ steps.tgs.outputs.mode }}
+          SELECTED: ${{ steps.tgs.outputs.selected }}
+          TOTAL: ${{ steps.tgs.outputs.total }}
+        run: |
+          echo "mode=$MODE selected=$SELECTED total=$TOTAL"
+          case "$MODE" in
+            selective|full|none) ;;
+            *) echo "::error::saida 'mode' inesperada: '$MODE'"; exit 1 ;;
+          esac
