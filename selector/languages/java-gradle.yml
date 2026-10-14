@@ -1,0 +1,46 @@
+# Configuracao de linguagem: Java + JUnit via Gradle (wrapper ./gradlew).
+# Igual ao java.yml, so muda o comando de teste.
+name: java-gradle
+
+source_patterns:
+  - "**/*.java"
+
+test_patterns:
+  - "src/test/java/**/*Test.java"
+  - "src/test/java/**/*Tests.java"
+  - "src/test/java/**/*IT.java"
+  - "**/src/test/java/**/*Test.java"
+  - "**/src/test/java/**/*Tests.java"
+
+full_suite_patterns:
+  - "build.gradle"
+  - "build.gradle.kts"
+  - "**/build.gradle"
+  - "**/build.gradle.kts"
+  - "settings.gradle*"
+  - "gradle.properties"
+  - "gradle/**"
+  - "gradlew"
+  - "gradlew.bat"
+  - "**/src/main/resources/**"
+  - "**/src/test/resources/**"
+
+data_patterns:
+  - "**/fixtures/**"
+
+polymorphic_relations:
+  - implements
+  - inherits
+  - extends
+
+# Spring: @SpringBootTest sobe a aplicacao inteira e costuma chamar a API por
+# URL (mvc.perform(get("/cart/total"))), sem nenhuma aresta no AST ate o
+# controller. Esses testes rodam sempre que algum codigo de producao muda.
+# @WebMvcTest(X.class) e @MockitoBean X nao precisam disso: citam a classe.
+always_run_markers:
+  - SpringBootTest
+
+# --rerun: forca o Gradle a executar mesmo se achar que o task esta "UP-TO-DATE".
+# {each_class:--tests %s} -> --tests CartTest --tests MoneyTest
+command: "./gradlew test --rerun --console=plain -q {each_class:--tests %s}"
+full_command: "./gradlew test --rerun --console=plain -q"
