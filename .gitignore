@@ -1,4 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Java / Maven
 target/
 *.class
+
+# Saida do indexador (graphify) e da ferramenta
+graphify-out/
+.selector-out/
+
+# Area de trabalho dos scripts de demonstracao
+demo/.work/
+
+# IDE
 .idea/
 *.iml
+
+./venv
+
+# Exemplos antigos: cada um e um repositorio git proprio (historico interno)
+legacy/examples/

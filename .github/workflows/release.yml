@@ -1,0 +1,38 @@
+name: Release (npm)
+
+# Publica o pacote no npm quando voce cria uma tag de versao:
+#   cd selector && npm version 1.0.1 --no-git-tag-version
+#   git commit -am "v1.0.1" && git tag v1.0.1 && git push --follow-tags
+# Requer o secret NPM_TOKEN (token "Automation" do npmjs.com) no repositorio.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # provenance: o npm mostra de qual commit/CI o pacote veio
+    defaults:
+      run:
+        working-directory: selector
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - name: Conferir versao da tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag v$tag nao bate com package.json ($pkg)"; exit 1
+          fi
+      - run: npm ci
+      - run: npm test -- --ci
+      - run: chmod +x bin/select-tests.sh
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

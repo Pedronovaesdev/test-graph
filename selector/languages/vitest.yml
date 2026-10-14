@@ -1,0 +1,55 @@
+# Configuracao de linguagem: TypeScript/JavaScript + Vitest (ex.: Next.js, Vite).
+# Igual ao typescript.yml, mas com os comandos e arquivos de config do Vitest.
+name: vitest
+
+source_patterns:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "**/*.mjs"
+  - "**/*.cjs"
+
+# Deve espelhar o `test.include` do vitest.config. `*.spec.ts` fica de fora de
+# proposito: em projetos com Playwright, e a convencao dos testes e2e, que o
+# Vitest nao roda. Se o seu projeto usa *.spec.ts no Vitest, acrescente aqui.
+test_patterns:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.test.js"
+  - "**/*.test.jsx"
+  - "**/__tests__/**/*.ts"
+  - "**/__tests__/**/*.tsx"
+
+full_suite_patterns:
+  - "package.json"
+  - "package-lock.json"
+  - "yarn.lock"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "vitest.config.*"
+  - "vitest.workspace.*"
+  - "vite.config.*"
+  - "tsconfig*.json"
+  - "next.config.*"
+  - ".env*"
+  # setupFiles do Vitest valem para todos os testes
+  - "vitest.setup.*"
+  - "setupTests.*"
+  - "tests/setup.*"
+  - "test/setup.*"
+
+data_patterns:
+  - "**/__snapshots__/**"
+  - "**/*.snap"
+  - "**/__fixtures__/**"
+  - "**/fixtures/**"
+  - "**/__mocks__/**"
+
+polymorphic_relations:
+  - implements
+
+# --passWithNoTests: se todos os escolhidos ficarem fora do `include` do
+# vitest.config, nao falha por "No test files found".
+command: "npx vitest run --passWithNoTests {files}"
+full_command: "npx vitest run --passWithNoTests"

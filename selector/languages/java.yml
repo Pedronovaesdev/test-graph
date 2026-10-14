@@ -1,0 +1,49 @@
+# Configuracao de linguagem: Java + JUnit (Maven/Surefire).
+name: java
+
+source_patterns:
+  - "**/*.java"
+
+test_patterns:
+  - "src/test/java/**/*Test.java"
+  - "src/test/java/**/*Tests.java"
+  - "src/test/java/**/*IT.java"
+  - "**/src/test/java/**/*Test.java"
+  - "**/src/test/java/**/*Tests.java"
+
+full_suite_patterns:
+  - "pom.xml"
+  - "**/pom.xml"
+  - "build.gradle"  # (projeto Gradle: use --lang java-gradle)
+  - "build.gradle.kts"
+  - "settings.gradle*"
+  - "gradle.properties"
+  - "gradle/**"
+  - ".mvn/**"
+  - "**/src/main/resources/**"
+  - "**/src/test/resources/**"
+
+data_patterns:
+  - "**/fixtures/**"
+
+# Injecao de dependencia: um consumidor costuma conhecer so a interface
+# (`Checkout -> Notifier`), enquanto a implementacao concreta
+# (`EmailNotifier implements Notifier`) chega em tempo de execucao. Seguir
+# estas relacoes nos dois sentidos faz uma mudanca em `EmailNotifier`
+# alcancar quem usa `Notifier`. Custa sobresselecao (outras implementacoes
+# da mesma interface tambem entram), mas evita falso negativo.
+polymorphic_relations:
+  - implements
+  - inherits
+  - extends
+
+# Spring: @SpringBootTest sobe a aplicacao inteira e costuma chamar a API por
+# URL (mvc.perform(get("/cart/total"))), sem nenhuma aresta no AST ate o
+# controller. Esses testes rodam sempre que algum codigo de producao muda.
+# @WebMvcTest(X.class) e @MockitoBean X nao precisam disso: citam a classe.
+always_run_markers:
+  - SpringBootTest
+
+# {classes} = nomes simples das classes de teste, separados por virgula.
+command: "mvn -q test -Dtest={classes} -Dsurefire.failIfNoSpecifiedTests=false"
+full_command: "mvn -q test"
