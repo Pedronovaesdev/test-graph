@@ -1,0 +1,4 @@
+# Unica dependencia Python: o indexador AST externo (graphify).
+# O seletor em si e TypeScript (selector/). Versao fixada porque o seletor
+# depende do formato do graph.json desta versao.
+graphifyy==0.9.90

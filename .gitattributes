@@ -1,0 +1,9 @@
+# Scripts precisam de LF mesmo em clones no Windows (core.autocrlf=true),
+# senao o bash quebra com "\r: command not found".
+*.sh      text eol=lf
+gradlew   text eol=lf
+mvnw      text eol=lf
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+*.jar     binary
+*.pptx    binary
