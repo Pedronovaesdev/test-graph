@@ -9,7 +9,7 @@ travessia reversa a partir dos arquivos alterados para achar todo teste JUnit qu
 transitivamente depende deles. Determinístico: mesmo código-fonte → mesmo grafo,
 sempre. Sem IA no núcleo.
 
-## Por que não Bazel?
+## Por que não Bazel? 
 
 Bazel resolve o mesmo problema (`bazel query "rdeps(...)"`, `bazel-diff`), mas parte
 de um grafo *declarado* nos `BUILD` files — exige adotar o build system inteiro.
