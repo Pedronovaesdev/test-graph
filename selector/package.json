@@ -1,0 +1,51 @@
+{
+  "name": "test-graph-selector",
+  "version": "1.0.0",
+  "description": "Selecao deterministica de testes por grafo de dependencias (AST): roda so os testes afetados por um diff, explicando o porque.",
+  "keywords": [
+    "test-selection",
+    "test-impact-analysis",
+    "ci",
+    "jest",
+    "junit",
+    "pytest",
+    "gradle",
+    "maven",
+    "ast"
+  ],
+  "license": "Apache-2.0",
+  "author": "Pedronovaesdev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Pedronovaesdev/test-graph-selector.git",
+    "directory": "selector"
+  },
+  "bin": {
+    "select-tests": "bin/select-tests.sh",
+    "test-graph-selector": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "languages",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "jest",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.17.6",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.6.3"
+  }
+}
