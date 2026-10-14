@@ -1,0 +1,59 @@
+# Configuracao de linguagem: TypeScript/JavaScript + Jest.
+# Adicionar uma linguagem nova = criar outro arquivo como este.
+# Padroes usam glob com `**` (qualquer profundidade), relativos ao projeto.
+name: typescript
+
+# Arquivos de codigo-fonte. Um arquivo destes que mude e NAO esteja no grafo
+# dispara a suite completa (o indexador nao o entendeu, entao nao sabemos o
+# que ele afeta).
+source_patterns:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "**/*.mjs"
+  - "**/*.cjs"
+
+# O que e um arquivo de teste. Deve espelhar o `testMatch` do jest.config.
+test_patterns:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+  - "**/*.test.js"
+  - "**/*.spec.js"
+  - "**/__tests__/**/*.ts"
+  - "**/__tests__/**/*.js"
+
+# Mudou um destes -> suite completa (afetam todos os testes e nao aparecem
+# como dependencia no AST).
+full_suite_patterns:
+  - "package.json"
+  - "package-lock.json"
+  - "yarn.lock"
+  - "pnpm-lock.yaml"
+  - "npm-shrinkwrap.json"
+  - "jest.config.*"
+  - "jest.setup.*"
+  - "babel.config.*"
+  - ".babelrc*"
+  - "tsconfig*.json"
+  - ".env*"
+
+# Snapshots e fixtures: dados lidos em tempo de execucao, invisiveis no AST.
+# Regra: roda os testes do diretorio que contem a pasta de snapshot/fixture
+# (e subdiretorios); se nao houver nenhum ali, suite completa.
+data_patterns:
+  - "**/__snapshots__/**"
+  - "**/*.snap"
+  - "**/__fixtures__/**"
+  - "**/fixtures/**"
+  - "**/__mocks__/**"
+
+# Relacoes seguidas tambem no sentido direto (polimorfismo / DI).
+polymorphic_relations:
+  - implements
+
+# Comandos. {files} = caminhos dos testes, relativos ao projeto.
+command: "npx jest --ci --passWithNoTests --runTestsByPath {files}"
+full_command: "npx jest --ci --passWithNoTests"
