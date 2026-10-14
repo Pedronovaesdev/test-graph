@@ -134,6 +134,49 @@ node selector/dist/cli.js query --graph demo/ts-project/graphify-out/graph.json 
 node selector/dist/cli.js query --graph demo/ts-project/graphify-out/graph.json Cart.total --direction dependencies
 ```
 
+### No CI de qualquer repositório (GitHub Action)
+
+O jeito mais simples. Este repositório é também uma GitHub Action
+(`action.yml` na raiz). Em outro repositório:
+
+```yaml
+on: [pull_request]
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0                       # obrigatório
+      - uses: actions/setup-node@v4            # a Action usa o Node do runner
+        with: { node-version: "20" }
+      - run: npm ci                            # dependências do SEU projeto
+      - uses: Pedronovaesdev/test-graph@v1
+        with:
+          dry-run: true                        # comece só observando
+```
+
+A Action instala o graphify num venv próprio, compila o seletor, calcula a base
+(base do PR, ou o commit anterior ao push) e roda `select-tests.sh`. O relatório
+vai para o Job Summary.
+
+| Entrada | Padrão | Descrição |
+|---|---|---|
+| `base` | automático | commit de comparação |
+| `head` | `HEAD` | commit analisado |
+| `project` | `.` | pasta do projeto (monorepo) |
+| `lang` | detecta | `typescript`, `vitest`, `java`, `java-gradle`, `python` |
+| `dry-run` | `false` | `true` = só seleciona e explica |
+| `graphify-version` | `0.9.90` | versão do indexador |
+
+Saídas: `mode` (`selective`, `full`, `none` ou `fail-safe`), `selected`, `total`,
+`report` (caminho do `report.json`). O workflow `action-selftest.yml` testa a
+Action neste repositório com `uses: ./`.
+
+**Publicar uma versão da Action:** `git tag v1.0.0 && git tag -f v1 && git push origin v1.0.0 && git push -f origin v1`.
+O `@v1` sempre aponta para a última versão 1.x.
+
 ### No CI do seu projeto (pacote npm)
 
 A ferramenta é publicada como pacote npm (`selector/` é o pacote, ~21 kB). O CI do
