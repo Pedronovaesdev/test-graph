@@ -1,0 +1,41 @@
+# Configuracao de linguagem: Python + pytest.
+name: python
+
+source_patterns:
+  - "**/*.py"
+
+test_patterns:
+  - "**/test_*.py"
+  - "**/*_test.py"
+
+full_suite_patterns:
+  - "pyproject.toml"
+  - "setup.py"
+  - "setup.cfg"
+  - "requirements*.txt"
+  - "pytest.ini"
+  - "tox.ini"
+  - "poetry.lock"
+  - "uv.lock"
+  - "Pipfile"
+  - "Pipfile.lock"
+  - ".env*"
+
+# conftest.py alterado: roda os testes da pasta dele (e subpastas).
+data_patterns:
+  - "**/conftest.py"
+  - "**/fixtures/**"
+  - "**/__snapshots__/**"
+
+# Fixtures do pytest chegam por injecao, sem import: `def test_x(cart)` nao
+# tem nenhuma aresta para o conftest.py. Se a busca alcanca um conftest.py,
+# todos os testes da pasta dele entram.
+scope_files:
+  - "**/conftest.py"
+
+# Heranca: quem recebe um User pode estar recebendo um Admin.
+polymorphic_relations:
+  - inherits
+
+command: "python -m pytest -q {files}"
+full_command: "python -m pytest -q"
