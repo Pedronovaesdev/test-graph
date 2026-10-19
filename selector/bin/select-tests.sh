@@ -71,6 +71,20 @@ command -v git >/dev/null 2>&1 || die "git nao encontrado"
 PROJECT="$(cd "$PROJECT" && pwd)"
 git -C "$PROJECT" rev-parse --git-dir >/dev/null 2>&1 || die "$PROJECT nao esta num repositorio git"
 
+# Validar as referencias antes de compilar/indexar. Referencias invalidas sao
+# erro de entrada (exit 2), nao uma falha de analise que possa ser mascarada.
+git -C "$PROJECT" rev-parse --verify --quiet "$BASE^{commit}" >/dev/null || die "commit base invalido: $BASE"
+git -C "$PROJECT" rev-parse --verify --quiet "$HEAD^{commit}" >/dev/null || die "commit head invalido: $HEAD"
+
+# Sem diff entre os commits nao ha analise nem executor a iniciar.
+if git -C "$PROJECT" diff --quiet "$BASE...$HEAD" --; then
+  log "base e head nao tem diferencas: nada a executar"
+  exit 0
+else
+  diff_status=$?
+  [[ "$diff_status" -eq 1 ]] || die "nao consegui comparar base e head"
+fi
+
 if [[ -z "$LANG_NAME" ]]; then
   if [[ -f "$PROJECT/package.json" ]] && compgen -G "$PROJECT/vitest.config.*" >/dev/null; then LANG_NAME="vitest"
   elif [[ -f "$PROJECT/package.json" ]]; then LANG_NAME="typescript"
@@ -81,6 +95,35 @@ if [[ -z "$LANG_NAME" ]]; then
   fi
 fi
 [[ -f "$SELECTOR_DIR/languages/$LANG_NAME.yml" ]] || die "linguagem sem configuracao: $LANG_NAME (crie languages/$LANG_NAME.yml no pacote)"
+
+# Pré-validar o executor antes da indexacao. Assim, ambiente incompleto falha
+# com uma mensagem direta em vez de gastar tempo e falhar no fim do pipeline.
+case "$LANG_NAME" in
+  java)
+    command -v java >/dev/null 2>&1 || die "Java nao encontrado (instale Java 17+ para executar Maven)"
+    command -v mvn >/dev/null 2>&1 || die "Maven (mvn) nao encontrado"
+    ;;
+  java-gradle)
+    command -v java >/dev/null 2>&1 || die "Java nao encontrado (instale Java 17+ para executar Gradle)"
+    [[ -x "$PROJECT/gradlew" ]] || die "wrapper Gradle executavel nao encontrado: $PROJECT/gradlew"
+    ;;
+  python)
+    command -v python >/dev/null 2>&1 || die "Python (python) nao encontrado"
+    python -c 'import pytest' >/dev/null 2>&1 || die "pytest nao encontrado no Python ativo (instale pytest no ambiente do projeto)"
+    ;;
+  typescript|vitest)
+    command -v npx >/dev/null 2>&1 || die "npx nao encontrado (instale Node.js 18+ e npm)"
+    test_runner="jest"
+    [[ "$LANG_NAME" == "vitest" ]] && test_runner="vitest"
+    repo_root="$(git -C "$PROJECT" rev-parse --show-toplevel)"
+    if ! command -v "$test_runner" >/dev/null 2>&1 \
+      && [[ ! -x "$PROJECT/node_modules/.bin/$test_runner" ]] \
+      && [[ ! -x "$repo_root/node_modules/.bin/$test_runner" ]]; then
+      die "$test_runner nao encontrado nas dependencias do projeto (instale as dependencias npm)"
+    fi
+    ;;
+  *) die "linguagem sem validacao de ambiente: $LANG_NAME" ;;
+esac
 
 OUT_DIR="${OUT_DIR:-$PROJECT/.selector-out}"
 mkdir -p "$OUT_DIR"
@@ -165,9 +208,6 @@ if [[ -d "$SELECTOR_DIR/src" ]] && { [[ ! -f "$SELECTOR_DIR/dist/cli.js" ]]    |
     || fail_safe "nao consegui compilar o seletor"
 fi
 command -v "$GRAPHIFY" >/dev/null 2>&1 || fail_safe "indexador '$GRAPHIFY' nao encontrado (pip install graphifyy==0.9.90)"
-
-git -C "$PROJECT" rev-parse --verify --quiet "$BASE^{commit}" >/dev/null || fail_safe "commit base invalido: $BASE"
-git -C "$PROJECT" rev-parse --verify --quiet "$HEAD^{commit}" >/dev/null || fail_safe "commit head invalido: $HEAD"
 
 # --- 3. grafos -------------------------------------------------------------
 log "indexando o head ($HEAD)"

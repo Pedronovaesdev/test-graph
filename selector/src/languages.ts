@@ -21,6 +21,22 @@ export const DEFAULT_IGNORE_PATTERNS = [
 ];
 /** Casados contra o caminho relativo a raiz do repositorio (nao do projeto). */
 export const DEFAULT_GLOBAL_FULL_SUITE_PATTERNS = [".github/workflows/**"];
+/** Alteracoes transversais que nao aparecem de forma confiavel no grafo AST. */
+export const DEFAULT_FULL_SUITE_PATTERNS = [
+  "**/*.yml",
+  "**/*.yaml",
+  "**/*.properties",
+  "**/*.sql",
+  "**/migrations/**",
+  "**/migration/**",
+  "**/db/migration/**",
+  "**/*openapi*.yaml",
+  "**/*openapi*.yml",
+  "**/*openapi*.json",
+  "**/*swagger*.yaml",
+  "**/*swagger*.yml",
+  "**/*swagger*.json",
+];
 
 const regexCache = new Map<string, RegExp>();
 
@@ -148,7 +164,7 @@ export function loadLanguage(nameOrPath: string): LanguageConfig {
     testPatterns: stringList(raw, "test_patterns"),
     command: String(raw.command),
     fullCommand: String(raw.full_command),
-    fullSuitePatterns: stringList(raw, "full_suite_patterns"),
+    fullSuitePatterns: [...DEFAULT_FULL_SUITE_PATTERNS, ...stringList(raw, "full_suite_patterns")],
     dataPatterns: stringList(raw, "data_patterns"),
     ignorePatterns: stringList(raw, "ignore_patterns", DEFAULT_IGNORE_PATTERNS),
     globalFullSuitePatterns: stringList(raw, "global_full_suite_patterns", DEFAULT_GLOBAL_FULL_SUITE_PATTERNS),

@@ -55,6 +55,20 @@ describe("selectTests", () => {
     expect(selectTests([c], ts, TESTS, demo()).hits[0].rule).toBe("global-config");
   });
 
+  it.each([
+    [ts, "config/application.yml"],
+    [ts, "config/application.properties"],
+    [java, "src/main/resources/application.properties"],
+    [java, "db/migration/V2__add_column.sql"],
+    [javaGradle, "gradle/libs.versions.toml"],
+    [python, "api/openapi.yaml"],
+    [python, "api/swagger.json"],
+  ])("configuracao transversal %s dispara a suite completa", (lang, file) => {
+    const s = selectTests([change("M", file)], lang, TESTS, demo());
+    expect(s.mode).toBe("full");
+    expect(s.hits[0].rule).toBe("build-config");
+  });
+
   it("codigo fora do grafo dispara a suite completa", () => {
     const s = selectTests([change("A", "src/novo.ts")], ts, TESTS, demo());
     expect(s.mode).toBe("full");

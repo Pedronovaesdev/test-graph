@@ -20,6 +20,8 @@ full_suite_patterns:
   - "settings.gradle*"
   - "gradle.properties"
   - "gradle/**"
+  - "**/gradle.lockfile"
+  - "**/libs.versions.toml"
   - "gradlew"
   - "gradlew.bat"
   - "**/src/main/resources/**"
