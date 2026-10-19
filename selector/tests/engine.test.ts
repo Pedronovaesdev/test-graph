@@ -61,6 +61,16 @@ describe("selectTests", () => {
     expect(s.hits[0].rule).toBe("source-not-in-graph");
   });
 
+  it("modulo usado por carregamento dinamico sem arestas dispara a suite completa", () => {
+    // import() montado em runtime nao aparece no grafo; um modulo isolado alterado
+    // pode estar sendo carregado por nome, entao a regra conservadora deve prevalecer.
+    const g = graph([], "head", ["src/plugins/custom.ts"]);
+    const s = selectTests([change("M", "src/plugins/custom.ts")], ts, TESTS, g);
+    expect(s.mode).toBe("full");
+    expect(selectedTests(s)).toEqual(TESTS);
+    expect(s.hits[0].rule).toBe("no-dependents");
+  });
+
   it("arquivo desconhecido (asset, env) dispara a suite completa", () => {
     expect(selectTests([change("M", "assets/logo.png")], ts, TESTS, demo()).hits[0].rule).toBe("unclassified-file");
   });
