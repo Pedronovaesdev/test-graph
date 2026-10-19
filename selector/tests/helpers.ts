@@ -17,6 +17,11 @@ export function graph(edges: string[], name = "head", extraFiles: string[] = [])
   const nodes = new Map<string, Record<string, unknown>>();
   const addNode = (id: string) => {
     if (nodes.has(id)) return;
+    if (id.startsWith("ext:")) {
+      // simbolo de biblioteca (ex.: ext:JpaRepository): nao pertence a nenhum arquivo do projeto
+      nodes.set(id, { id, label: id.slice(4) });
+      return;
+    }
     const [file, symbol] = id.split("#");
     nodes.set(id, {
       id,

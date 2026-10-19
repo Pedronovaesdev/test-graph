@@ -125,7 +125,7 @@ export function selectTests(
       for (const node of graph.nodesInFile(seedFile)) if (!seeds.has(node)) seeds.set(node, seedFile);
     }
     if (seeds.size === 0) return;
-    const visited = graph.reverseReach(seeds, DEFAULT_RELATIONS, lang.polymorphicRelations);
+    const visited = graph.reverseReach(seeds, DEFAULT_RELATIONS, lang.polymorphicRelations, (f) => f !== null && isTest(lang, f));
     for (const [node, visit] of visited) {
       const file = graph.sourceFile(node);
       if (!file) continue;
