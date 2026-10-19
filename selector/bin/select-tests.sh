@@ -80,7 +80,18 @@ if [[ -z "$LANG_NAME" ]]; then
   else die "nao consegui detectar a linguagem; use --lang"
   fi
 fi
-[[ -f "$SELECTOR_DIR/languages/$LANG_NAME.yml" ]] || die "linguagem sem configuracao: $LANG_NAME (crie languages/$LANG_NAME.yml no pacote)"
+# --lang aceita um nome (typescript, java...) ou o caminho de um .yml do
+# proprio projeto (ex.: .github/test-selector.yml com `extends: typescript`).
+case "$LANG_NAME" in
+  *.yml|*.yaml)
+    if [[ -f "$LANG_NAME" ]]; then LANG_FILE="$(cd "$(dirname "$LANG_NAME")" && pwd)/$(basename "$LANG_NAME")"
+    elif [[ -f "$PROJECT/$LANG_NAME" ]]; then LANG_FILE="$PROJECT/$LANG_NAME"
+    else die "arquivo de configuracao nao encontrado: $LANG_NAME"
+    fi ;;
+  *)
+    LANG_FILE="$SELECTOR_DIR/languages/$LANG_NAME.yml"
+    [[ -f "$LANG_FILE" ]] || die "linguagem sem configuracao: $LANG_NAME (crie languages/$LANG_NAME.yml no pacote, ou passe o caminho de um .yml)" ;;
+esac
 
 OUT_DIR="${OUT_DIR:-$PROJECT/.selector-out}"
 mkdir -p "$OUT_DIR"
@@ -90,7 +101,16 @@ GRAPH_DIR="$PROJECT/graphify-out"
 # Comando da suite completa sem depender do seletor (usado no fail-safe).
 default_full_command() {
   if [[ -n "${FULL_SUITE_COMMAND:-}" ]]; then echo "$FULL_SUITE_COMMAND"; return; fi
-  sed -n 's/^full_command: *"\(.*\)" *$/\1/p' "$SELECTOR_DIR/languages/$LANG_NAME.yml"
+  local cmd base
+  cmd="$(sed -n 's/^full_command: *"\(.*\)" *$/\1/p' "$LANG_FILE")"
+  if [[ -z "$cmd" ]]; then
+    # config do projeto sem full_command proprio: usa o da configuracao herdada
+    base="$(sed -n 's/^extends: *"\{0,1\}\([A-Za-z0-9_-]*\)"\{0,1\} *$/\1/p' "$LANG_FILE")"
+    if [[ -n "$base" && -f "$SELECTOR_DIR/languages/$base.yml" ]]; then
+      cmd="$(sed -n 's/^full_command: *"\(.*\)" *$/\1/p' "$SELECTOR_DIR/languages/$base.yml")"
+    fi
+  fi
+  echo "$cmd"
 }
 
 run_tests() {
@@ -190,7 +210,7 @@ if [[ "$NEEDS_BASE" == "yes" ]]; then
 fi
 
 # --- 4. selecao + explicacao ----------------------------------------------
-selector select --project "$PROJECT" --base "$BASE" --head "$HEAD" --lang "$LANG_NAME" \
+selector select --project "$PROJECT" --base "$BASE" --head "$HEAD" --lang "$LANG_FILE" \
   --head-graph "$HEAD_GRAPH" "${BASE_ARGS[@]+"${BASE_ARGS[@]}"}" \
   --format "$FORMAT" --out-dir "$OUT_DIR" || fail_safe "o seletor terminou com erro"
 

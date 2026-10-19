@@ -9,7 +9,7 @@
 import * as path from "node:path";
 import type { Change } from "./diff";
 import { DEFAULT_RELATIONS, type DependencyGraph } from "./graph";
-import { isSource, isTest, matches, type LanguageConfig } from "./languages";
+import { isSource, isTest, isTestSupport, matches, type LanguageConfig } from "./languages";
 
 // Nomes de regra: estaveis, aparecem no JSON do relatorio.
 export const GLOBAL_CONFIG = "global-config"; // .github/workflows/* -> suite completa
@@ -130,7 +130,7 @@ export function classify(
       // ou quem usa e o framework (bean Spring com @EventListener). Na duvida,
       // suite completa. Arquivo novo fica de fora: ninguem o usa ainda.
       const modified = change.status === "M" || change.status === "R";
-      if (!forcedTest && modified && isSource(lang, current) && !head.hasDependents(current, DEFAULT_RELATIONS, lang.polymorphicRelations)) {
+      if (!forcedTest && modified && isSource(lang, current) && !isTestSupport(lang, current) && !head.hasDependents(current, DEFAULT_RELATIONS, lang.polymorphicRelations)) {
         hits.push({ rule: NO_DEPENDENTS, path: current, detail: "codigo modificado sem nenhum dependente no grafo (indexador pode ter perdido referencias)" });
       } else if (!forcedTest) {
         hits.push({ rule: GRAPH_SEED, path: current, detail: "no grafo do head" });
