@@ -3,7 +3,7 @@
  */
 import { compare, type Change } from "./diff";
 import { DEFAULT_RELATIONS, type DependencyGraph, type Step } from "./graph";
-import { isTest, matches, type LanguageConfig } from "./languages";
+import { companionTestFor, isTest, scopeFor, type LanguageConfig } from "./languages";
 import * as rules from "./rules";
 
 export type Mode = "selective" | "full" | "none";
@@ -15,6 +15,8 @@ export interface Reason {
   steps: Step[];
   /** Arquivo de escopo (ex.: conftest.py) ou marcador (ex.: SpringBootTest) que trouxe o teste. */
   scope: string | null;
+  /** verbo da explicacao quando o teste veio por um arquivo de escopo ("usa fixtures de", "usa os passos de") */
+  scopeVerb?: string;
 }
 
 export interface Selection {
@@ -123,7 +125,7 @@ export function selectTests(
       for (const node of graph.nodesInFile(seedFile)) if (!seeds.has(node)) seeds.set(node, seedFile);
     }
     if (seeds.size === 0) return;
-    const visited = graph.reverseReach(seeds, DEFAULT_RELATIONS, lang.polymorphicRelations);
+    const visited = graph.reverseReach(seeds, DEFAULT_RELATIONS, lang.polymorphicRelations, (f) => f !== null && isTest(lang, f));
     for (const [node, visit] of visited) {
       const file = graph.sourceFile(node);
       if (!file) continue;
@@ -131,11 +133,20 @@ export function selectTests(
         const steps = graph.chain(visited, node);
         // Prefere: grafo do head, cadeia mais curta, ordem de id (desempate estavel).
         offer(file, [2, order, steps.length, node], { kind: "dependency", seedFile: visit.seedFile, graph: graph.name, steps, scope: null });
-      } else if (matches(file, lang.scopeFiles)) {
+      } else if (companionTestFor(lang, file)) {
+        // X.steps.tsx alcancado -> roda X.feature (o teste de verdade, em texto).
         const steps = graph.chain(visited, node);
-        const dir = rules.dataDirFor(file);
+        offer(companionTestFor(lang, file)!, [2, order, steps.length + 1, node], {
+          kind: "dependency", seedFile: visit.seedFile, graph: graph.name, steps, scope: file, scopeVerb: "usa os passos de",
+        });
+      } else if (scopeFor(lang, file)) {
+        // conftest.py / steps compartilhados: valem para a pasta inteira.
+        const scope = scopeFor(lang, file)!;
+        const steps = graph.chain(visited, node);
+        const dir = scope.dir ?? rules.dataDirFor(file);
+        const verb = scope.dir ? "usa os passos de" : "usa fixtures de";
         for (const test of universe.filter((t) => t.startsWith(dir ? `${dir}/` : ""))) {
-          offer(test, [2, order, steps.length + 1, node], { kind: "dependency", seedFile: visit.seedFile, graph: graph.name, steps, scope: file });
+          offer(test, [2, order, steps.length + 1, node], { kind: "dependency", seedFile: visit.seedFile, graph: graph.name, steps, scope: file, scopeVerb: verb });
         }
       }
     }

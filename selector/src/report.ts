@@ -66,7 +66,7 @@ export function explain(selection: Selection, test: string, reason: Reason): str
   const tail = `[alterado em ${reason.seedFile}${reason.graph === "base" ? ", via grafo do base" : ""}]`;
   const parts: string[] = [];
   // Teste que recebe fixtures de um arquivo de escopo (ex.: conftest.py) sem importa-lo.
-  if (reason.scope) parts.push(`${test} --usa fixtures de-->`);
+  if (reason.scope) parts.push(`${test} --${reason.scopeVerb ?? "usa fixtures de"}-->`);
   if (reason.steps.length === 0) return `${[...parts, reason.scope ?? test].join(" ")} ${tail}`;
   const first = reason.steps[0];
   parts.push(graph.display(first.polymorphic ? first.dependency : first.dependent));

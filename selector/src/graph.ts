@@ -210,13 +210,20 @@ export class DependencyGraph {
    *
    * `seeds` mapeia no -> arquivo alterado que o tornou semente. Relacoes em
    * `polymorphicRelations` tambem sao seguidas no sentido direto
-   * (implementacao afetada -> interface -> quem usa a interface). A ordem de
-   * visita depende so da ordenacao dos ids: mesma entrada, mesmas cadeias.
+   * (implementacao afetada -> interface -> quem usa a interface), com dois
+   * limites:
+   * - so ate supertipos DO PROJETO: `X extends JpaRepository` nao liga X a
+   *   todos os outros repositorios, porque o JpaRepository (biblioteca) nao
+   *   mudou e ninguem recebe "um X" no lugar dele;
+   * - nunca a partir de arquivos de teste (`skipPolymorphicFrom`): um teste
+   *   novo herdando de uma base de testes nao afeta os outros testes dela.
+   * A ordem de visita depende so da ordenacao dos ids: mesma entrada, mesmas cadeias.
    */
   reverseReach(
     seeds: Map<string, string>,
     relations: ReadonlySet<string> = DEFAULT_RELATIONS,
     polymorphicRelations: ReadonlySet<string> = new Set(),
+    skipPolymorphicFrom: (file: string | null) => boolean = () => false,
   ): Map<string, Visit> {
     const visited = new Map<string, Visit>();
     const queue: string[] = [];
@@ -232,9 +239,11 @@ export class DependencyGraph {
       for (const e of this.inEdges.get(current) ?? []) {
         if (relations.has(e.relation)) candidates.push({ node: e.source, relation: e.relation, location: e.location, polymorphic: false });
       }
-      for (const e of this.outEdges.get(current) ?? []) {
-        if (polymorphicRelations.has(e.relation)) {
-          candidates.push({ node: e.target, relation: e.relation, location: e.location, polymorphic: true });
+      if (!skipPolymorphicFrom(this.sourceFile(current))) {
+        for (const e of this.outEdges.get(current) ?? []) {
+          if (polymorphicRelations.has(e.relation) && this.isProjectNode(e.target)) {
+            candidates.push({ node: e.target, relation: e.relation, location: e.location, polymorphic: true });
+          }
         }
       }
       candidates.sort(
@@ -283,27 +292,43 @@ export class DependencyGraph {
         if (relations.has(e.relation) && this.nodes.get(e.source)!.sourceFile !== file) return true;
       }
       for (const e of this.outEdges.get(node) ?? []) {
-        if (polymorphicRelations.has(e.relation)) return true;
+        if (polymorphicRelations.has(e.relation) && this.isProjectNode(e.target)) return true;
       }
     }
     return false;
   }
 
+  /** No definido no codigo do projeto (e nao numa biblioteca externa). */
+  isProjectNode(node: string): boolean {
+    return this.nodes.get(node)?.sourceFile != null;
+  }
+
   /**
-   * Primeiro marcador (ex.: `SpringBootTest`) que algum no do arquivo
-   * referencia/importa, ou null. Compara com o ultimo trecho do label
-   * (`org.springframework...SpringBootTest` -> `SpringBootTest`) e com o fim do id.
+   * Primeiro marcador (ex.: `SpringBootTest`) que o arquivo usa, direto ou
+   * HERDADO: `class FooTest extends AbstractIntegrationTest` herda o
+   * `@SpringBootTest` da base. Sobe pela heranca (`inherits`/`extends`) ate
+   * as classes do projeto, transitivamente. Compara com o ultimo trecho do
+   * label (`org.springframework...SpringBootTest` -> `SpringBootTest`) e com
+   * o fim do id.
    */
   markerUsedBy(file: string, markers: readonly string[]): string | null {
     if (markers.length === 0) return null;
     const wanted = new Map(markers.map((m) => [m.replace(/^@/, "").toLowerCase(), m]));
-    for (const node of this.byFile.get(file) ?? []) {
-      for (const e of this.outEdges.get(node) ?? []) {
-        const target = this.nodes.get(e.target)!;
-        const last = target.label.replace(/^@/, "").split(".").pop()!.toLowerCase();
-        const idLast = target.id.toLowerCase().split("_").pop()!;
-        const hit = wanted.get(last) ?? wanted.get(idLast);
-        if (hit) return hit;
+    const seenFiles = new Set<string>([file]);
+    const queue = [file];
+    for (let i = 0; i < queue.length; i++) {
+      for (const node of this.byFile.get(queue[i]) ?? []) {
+        for (const e of this.outEdges.get(node) ?? []) {
+          const target = this.nodes.get(e.target)!;
+          const last = target.label.replace(/^@/, "").split(".").pop()!.toLowerCase();
+          const idLast = target.id.toLowerCase().split("_").pop()!;
+          const hit = wanted.get(last) ?? wanted.get(idLast);
+          if (hit) return hit;
+          if ((e.relation === "inherits" || e.relation === "extends") && target.sourceFile && !seenFiles.has(target.sourceFile)) {
+            seenFiles.add(target.sourceFile);
+            queue.push(target.sourceFile);
+          }
+        }
       }
     }
     return null;
