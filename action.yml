@@ -30,6 +30,10 @@ inputs:
     description: "Versao do indexador AST (graphifyy no PyPI)."
     required: false
     default: "0.9.90"
+  cache:
+    description: "true = guarda o cache do graphify entre execucoes (so os arquivos alterados sao relidos)."
+    required: false
+    default: "true"
 
 outputs:
   mode:
@@ -67,6 +71,19 @@ runs:
         command -v node >/dev/null || { echo "::error::Node.js nao encontrado. Adicione actions/setup-node antes desta Action."; exit 2; }
         npm ci --silent --no-audit --no-fund
         npm run build --silent
+
+    # Cache por conteudo de arquivo do graphify. O grafo em si (graph.json) e
+    # sempre regerado para o commit analisado; so a extracao de cada arquivo e
+    # reaproveitada. A chave muda a cada commit, e restore-keys pega o cache
+    # mais recente do mesmo projeto.
+    - name: Cache do indexador
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.project }}/graphify-out
+        key: tgs-graphify-${{ runner.os }}-${{ inputs.graphify-version }}-${{ inputs.project }}-${{ github.sha }}
+        restore-keys: |
+          tgs-graphify-${{ runner.os }}-${{ inputs.graphify-version }}-${{ inputs.project }}-
 
     - name: Definir a base da comparacao
       id: base

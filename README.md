@@ -169,6 +169,7 @@ vai para o Job Summary.
 | `lang` | detecta | `typescript`, `vitest`, `java`, `java-gradle`, `python` |
 | `dry-run` | `false` | `true` = só seleciona e explica |
 | `graphify-version` | `0.9.90` | versão do indexador |
+| `cache` | `true` | guarda o cache do graphify entre execuções (só os arquivos alterados são relidos) |
 
 Saídas: `mode` (`selective`, `full`, `none` ou `fail-safe`), `selected`, `total`,
 `report` (caminho do `report.json`). O workflow `action-selftest.yml` testa a
