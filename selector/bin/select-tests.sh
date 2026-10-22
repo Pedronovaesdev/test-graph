@@ -148,6 +148,31 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Python do ambiente do graphify (mesmo diretorio do executavel), para rodar o
+# graphify-fast.py. Vazio = chama o graphify direto. GRAPHIFY_FAST=0 desliga.
+GRAPHIFY_PY=""
+find_graphify_python() {
+  [[ "${GRAPHIFY_FAST:-1}" == "0" ]] && return 0
+  local exe dir py
+  exe="$(command -v "$GRAPHIFY" 2>/dev/null)" || return 0
+  dir="$(dirname "$exe")"
+  for py in "$dir/python" "$dir/python.exe" "$dir/python3"; do
+    if [[ -x "$py" ]] && "$py" -c "import graphify.build, graphify.__main__" >/dev/null 2>&1; then
+      GRAPHIFY_PY="$py"
+      return 0
+    fi
+  done
+}
+
+# Roda o graphify pelo graphify-fast.py; se falhar, cai para o graphify normal.
+run_graphify() {
+  if [[ -n "$GRAPHIFY_PY" ]]; then
+    PYTHONHASHSEED=0 "$GRAPHIFY_PY" "$SELECTOR_DIR/bin/graphify-fast.py" "$@" && return 0
+    log "graphify-fast falhou; repetindo com o graphify normal"
+  fi
+  "$GRAPHIFY" "$@"
+}
+
 # Gera o grafo de um commit. Se o commit for o checkout atual, indexa no
 # lugar (aproveita o cache por arquivo em graphify-out/cache). Senao, cria um
 # git worktree temporario daquele commit e indexa la.
@@ -157,7 +182,7 @@ build_graph() {
   commit="$(git -C "$PROJECT" rev-parse --verify "$rev^{commit}")" || return 1
   current="$(git -C "$PROJECT" rev-parse HEAD)"
   if [[ "$commit" == "$current" && "$out" == "$GRAPH_DIR" ]]; then
-    "$GRAPHIFY" extract "$PROJECT" --no-cluster --code-only >&2 || return 1
+    run_graphify extract "$PROJECT" --no-cluster --code-only >&2 || return 1
     return 0
   fi
   repo="$(git -C "$PROJECT" rev-parse --show-toplevel)"
@@ -167,7 +192,7 @@ build_graph() {
   git -C "$repo" worktree add --detach --quiet "$wt" "$commit" >&2 || return 1
   WORKTREES+=("$wt")
   mkdir -p "$out"
-  "$GRAPHIFY" extract "$wt/$prefix" --no-cluster --code-only --out "$out" >&2 || return 1
+  run_graphify extract "$wt/$prefix" --no-cluster --code-only --out "$out" >&2 || return 1
   # --out DIR grava em DIR/graphify-out/graph.json
   [[ -f "$out/graphify-out/graph.json" ]] && mv -f "$out/graphify-out/graph.json" "$out/graph.json"
   return 0
@@ -185,6 +210,7 @@ if [[ -d "$SELECTOR_DIR/src" ]] && { [[ ! -f "$SELECTOR_DIR/dist/cli.js" ]]    |
     || fail_safe "nao consegui compilar o seletor"
 fi
 command -v "$GRAPHIFY" >/dev/null 2>&1 || fail_safe "indexador '$GRAPHIFY' nao encontrado (pip install graphifyy==0.9.90)"
+find_graphify_python
 
 git -C "$PROJECT" rev-parse --verify --quiet "$BASE^{commit}" >/dev/null || fail_safe "commit base invalido: $BASE"
 git -C "$PROJECT" rev-parse --verify --quiet "$HEAD^{commit}" >/dev/null || fail_safe "commit head invalido: $HEAD"
