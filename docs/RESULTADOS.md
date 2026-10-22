@@ -23,7 +23,7 @@ Para cada um: o que foi medido, como, o resultado e o que ele ensinou sobre a fe
 | TransportEasy | Spring Boot + Gradle + Testcontainers | 6 min 34 s (MEDIDO, CI) | **45%** no PR real de 42 arquivos (MEDIDO) | depende do PR; o piso são 104 testes `@SpringBootTest` |
 | [jsoup](https://github.com/jhy/jsoup) | Java + Maven | ~45 s (MEDIDO) | ~9% | **nenhum**: fica mais lento |
 | [Apache Commons Math](https://github.com/apache/commons-math) | Java + Maven | 84 s (MEDIDO) | mediana de **93%** das classes | **nenhum**: o custo fixo empata |
-| [Bitwarden clients](https://github.com/bitwarden/clients) | Angular + Jest | 232 min de espera em 15 commits (MEDIDO, CI) | **43%** (15 commits) | **−38% na espera do PR, −33% em minutos de CI** (MEDIDO no GitHub Actions) |
+| [Bitwarden clients](https://github.com/bitwarden/clients) | Angular + Jest | ~15,5 min de espera por PR (MEDIDO, CI) | **43%** dos arquivos de teste (15 commits) | **15,5 → 9,5 min por PR (−38%); −33% em minutos de CI** (MEDIDO no GitHub Actions) |
 
 **A conclusão principal:** a seleção funciona bem em código modular, mas só **economiza tempo** quando a suíte é longa comparada ao custo fixo da ferramenta (~15 s a 2 min, conforme o tamanho do repositório). Em suítes de segundos ou de 1 a 2 minutos ela não compensa. Em suítes de dezenas de minutos (Cypress, testes de integração), compensa.
 
@@ -202,7 +202,9 @@ A seleção saiu idêntica antes e depois da otimização nos 20 casos medidos.
 
 **Repositório:** https://github.com/bitwarden/clients
 
-**Stack:** monorepo Angular (web vault, extensão de navegador, desktop) + Jest, com ~40 bibliotecas em `libs/`. 6.752 arquivos TypeScript, 815 templates HTML e **1.500 arquivos de teste** (`.spec.ts`).
+**Stack:** monorepo Angular (web vault, extensão de navegador, desktop) + Jest, com ~40 bibliotecas em `libs/`. 6.752 arquivos TypeScript, 815 templates HTML e **1.500 arquivos de teste** (`.spec.ts`) com **~20 mil testes** dentro deles (contagem aproximada de `it(...)`/`test(...)`; um `it.each` conta como um).
+
+A ferramenta escolhe **arquivos de teste**: quando um `.spec.ts` é escolhido, todos os testes dentro dele rodam. Por isso os números abaixo ("518 de 1.500") são em arquivos.
 
 **CI do projeto:** os testes rodam em 5 grupos. O grupo "Libs" levou **19 min, dos quais 16,5 min só testes** ([run de referência](https://github.com/bitwarden/clients/actions/runs/39812000382)).
 
@@ -263,7 +265,10 @@ Das 6 vezes em que rodou tudo, 3 foram por dependências ou workflow do CI e 3 p
 | 162fc00f96 | 31 s | 12m12s | 12m29s (suíte completa) | 19m22s | 19m41s |
 | ea6c9e20bc | 29 s | 16m53s | **6m10s** | 24m14s | **12m29s** |
 | 98b19b848b | 29 s | 12m23s | **4m53s** | 19m47s | **11m14s** |
-| **Total** | | **232 min** | **143 min (−38%)** | **346 min** | **233 min (−33%)** |
+| **Total (15 commits)** | | **232 min** | **143 min (−38%)** | **346 min** | **233 min (−33%)** |
+| **Média por PR** | | **~15,5 min** | **~9,5 min** | **~23 min** | **~15,5 min** |
+
+Os totais somam os 15 commits. **Por PR, em média, a espera pelos testes caiu de ~15,5 min para ~9,5 min**, e o consumo de máquina de ~23 min para ~15,5 min.
 
 - **Nos 9 commits em que a ferramenta selecionou testes** (ou nenhum), o PR esperou de 0,4 a 13,6 min, contra 11,6 a 18,4 min com tudo. Em 4 deles, caiu de mais de 13 min para menos de 2 min.
 - **Nos 6 que rodaram tudo** (dependências, workflow do CI, traduções), o custo extra foi de ~20 a 30 s, o tempo da seleção. A diferença maior em `16a22195c5` (+1,6 min) é variação entre execuções da suíte completa, não custo da ferramenta.
@@ -330,6 +335,6 @@ Estes não foram rodados, mas o CI deles foi analisado:
 ## 9. Limitações e pendências
 
 - **Segurança contra bugs reais:** a análise de mutantes (injetar bugs e ver se a seleção os pega) ficou pendente nos projetos open source. Nas demos, 5 de 5 bugs injetados foram pegos.
-- **Tempo no CI:** nos projetos da empresa, o tempo seletivo é medido localmente ou projetado; falta a medição dentro do CI.
-- **Tempo medido em CI:** só no Bitwarden. Nos projetos da empresa, o tempo seletivo ainda é medido localmente ou projetado.
+- **Tempo no CI:** medido só no Bitwarden. Nos projetos da empresa, o tempo seletivo ainda é medido localmente ou projetado.
+- **Falhas de teste no Bitwarden:** o workflow registra falhas em vez de parar o job. A coluna "Falhas" do resumo do run precisa ser conferida para confirmar que nenhum grupo falhou só na execução seletiva.
 - **Testes que chamam a aplicação por URL/HTTP** (`@SpringBootTest`, testes de integração GraphQL) não têm ligação no código com o que testam. A ferramenta os roda sempre, e isso define o piso de economia.
