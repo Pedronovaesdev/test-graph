@@ -9,7 +9,7 @@
 import * as path from "node:path";
 import type { Change } from "./diff";
 import { DEFAULT_RELATIONS, type DependencyGraph } from "./graph";
-import { isSource, isTest, isTestSupport, matches, type LanguageConfig } from "./languages";
+import { isSource, isTest, isTestSupport, matches, ownerFor, type LanguageConfig } from "./languages";
 
 // Nomes de regra: estaveis, aparecem no JSON do relatorio.
 export const GLOBAL_CONFIG = "global-config"; // .github/workflows/* -> suite completa
@@ -26,6 +26,7 @@ export const NO_BASE_GRAPH = "no-base-graph"; // remocao/renomeacao sem grafo do
 export const UNCLASSIFIED = "unclassified-file"; // nenhuma regra se aplica -> suite completa
 export const NO_DEPENDENTS = "no-dependents"; // codigo modificado que ninguem usa no grafo -> suite completa
 export const ALWAYS_RUN = "always-run"; // teste de contexto completo (ex.: @SpringBootTest) -> roda com qualquer codigo
+export const OWNED_FILE = "owned-file"; // template/estilo (ex.: x.component.html) -> semente no codigo dono
 
 export const FULL_SUITE_RULES: ReadonlySet<string> = new Set([
   GLOBAL_CONFIG,
@@ -108,6 +109,17 @@ export function classify(
         dataDir: dir,
       });
     }
+  }
+
+  // Template/estilo de um componente: conta como mudanca no componente dono.
+  // Se o dono nao esta no grafo, segue para as regras abaixo (suite completa).
+  const owner = current ? ownerFor(lang, current) : null;
+  if (current && owner && head?.hasFile(owner)) {
+    const modified = change.status === "M" || change.status === "R";
+    if (modified && !head.hasDependents(owner, DEFAULT_RELATIONS, lang.polymorphicRelations)) {
+      return decision(change, [{ rule: NO_DEPENDENTS, path: owner, detail: `dono de ${current} sem nenhum dependente no grafo` }]);
+    }
+    return decision(change, [{ rule: OWNED_FILE, path: current, detail: `pertence a ${owner}` }], { headSeed: owner });
   }
 
   const hits: RuleHit[] = [];

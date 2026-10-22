@@ -65,3 +65,47 @@ describe("heranca entre testes", () => {
     expect(selectedTests(s)).toEqual([`${T}/MathTest.java`]);
   });
 });
+
+describe("implementacao sem consumidores (no-dependents via polimorfismo)", () => {
+  const tests = [`${T}/CheckoutTest.java`, `${T}/EmailTest.java`];
+
+  it("implementacao de interface que ninguem usa roda a suite completa", () => {
+    const g = graph([
+      `${M}/Email.java#EmailNotifier implements ${M}/Notifier.java#Notifier`,
+      `${M}/Email.java#EmailNotifier imports ${M}/Notifier.java#Notifier`,
+    ]);
+    const s = selectTests([change("M", `${M}/Email.java`)], javaGradle, tests, g);
+    expect(s.mode).toBe("full");
+    expect(s.hits.map((h) => h.rule)).toEqual(["no-dependents"]);
+  });
+
+  it("outra implementacao da mesma interface nao conta como consumidora", () => {
+    const g = graph([
+      `${M}/Email.java#EmailNotifier implements ${M}/Notifier.java#Notifier`,
+      `${M}/Sms.java#SmsNotifier implements ${M}/Notifier.java#Notifier`,
+      `${M}/Sms.java#SmsNotifier imports ${M}/Notifier.java#Notifier`,
+    ]);
+    expect(selectTests([change("M", `${M}/Email.java`)], javaGradle, tests, g).mode).toBe("full");
+  });
+
+  it("consumidor de um supertipo mais acima na cadeia conta", () => {
+    const g = graph([
+      `${M}/Email.java#EmailNotifier implements ${M}/Notifier.java#Notifier`,
+      `${M}/Notifier.java#Notifier extends ${M}/Channel.java#Channel`,
+      `${M}/Checkout.java#Checkout references ${M}/Channel.java#Channel`,
+      `${T}/CheckoutTest.java imports ${M}/Checkout.java#Checkout`,
+    ]);
+    const s = selectTests([change("M", `${M}/Email.java`)], javaGradle, tests, g);
+    expect(s.mode).toBe("selective");
+    expect(selectedTests(s)).toEqual([`${T}/CheckoutTest.java`]);
+  });
+
+  it("implementacao com teste proprio nao depende do supertipo", () => {
+    const g = graph([
+      `${M}/Email.java#EmailNotifier implements ${M}/Notifier.java#Notifier`,
+      `${T}/EmailTest.java imports ${M}/Email.java#EmailNotifier`,
+    ]);
+    const s = selectTests([change("M", `${M}/Email.java`)], javaGradle, tests, g);
+    expect(selectedTests(s)).toEqual([`${T}/EmailTest.java`]);
+  });
+});
