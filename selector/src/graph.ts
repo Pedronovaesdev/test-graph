@@ -291,8 +291,54 @@ export class DependencyGraph {
       for (const e of this.inEdges.get(node) ?? []) {
         if (relations.has(e.relation) && this.nodes.get(e.source)!.sourceFile !== file) return true;
       }
-      for (const e of this.outEdges.get(node) ?? []) {
-        if (polymorphicRelations.has(e.relation) && this.isProjectNode(e.target)) return true;
+    }
+    return this.supertypeHasConsumers(file, relations, polymorphicRelations);
+  }
+
+  /**
+   * Uma implementacao (`EmailNotifier implements Notifier`) e usada via DI
+   * quando o supertipo tem consumidores reais: alguem que o use, sem contar
+   * as outras implementacoes dele. Sobe pela cadeia de supertipos do projeto
+   * (`Notifier extends Channel`, usado por `Checkout`). Interface que so as
+   * proprias implementacoes conhecem nao conta: a mudanca cai em no-dependents.
+   */
+  private supertypeHasConsumers(
+    file: string,
+    relations: ReadonlySet<string>,
+    polymorphicRelations: ReadonlySet<string>,
+  ): boolean {
+    if (polymorphicRelations.size === 0) return false;
+    const seen = new Set<string>([file]);
+    const queue = [file];
+    for (let i = 0; i < queue.length; i++) {
+      for (const node of this.byFile.get(queue[i]) ?? []) {
+        for (const e of this.outEdges.get(node) ?? []) {
+          if (!polymorphicRelations.has(e.relation)) continue;
+          const superFile = this.sourceFile(e.target);
+          if (superFile === null || seen.has(superFile)) continue;
+          seen.add(superFile);
+          if (this.hasConsumers(superFile, relations, polymorphicRelations)) return true;
+          queue.push(superFile);
+        }
+      }
+    }
+    return false;
+  }
+
+  /** Algum arquivo usa `superFile` sem ser uma implementacao/subtipo dele. */
+  private hasConsumers(superFile: string, relations: ReadonlySet<string>, polymorphicRelations: ReadonlySet<string>): boolean {
+    const nodes = this.byFile.get(superFile) ?? [];
+    const subtypes = new Set<string>();
+    for (const node of nodes) {
+      for (const e of this.inEdges.get(node) ?? []) {
+        if (polymorphicRelations.has(e.relation)) subtypes.add(this.nodes.get(e.source)!.sourceFile ?? "");
+      }
+    }
+    for (const node of nodes) {
+      for (const e of this.inEdges.get(node) ?? []) {
+        if (!relations.has(e.relation) || polymorphicRelations.has(e.relation)) continue;
+        const from = this.nodes.get(e.source)!.sourceFile;
+        if (from !== null && from !== superFile && !subtypes.has(from)) return true;
       }
     }
     return false;
