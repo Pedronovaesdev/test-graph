@@ -23,7 +23,7 @@ Para cada um: o que foi medido, como, o resultado e o que ele ensinou sobre a fe
 | TransportEasy | Spring Boot + Gradle + Testcontainers | 6 min 34 s (MEDIDO, CI) | **45%** no PR real de 42 arquivos (MEDIDO) | depende do PR; o piso são 104 testes `@SpringBootTest` |
 | [jsoup](https://github.com/jhy/jsoup) | Java + Maven | ~45 s (MEDIDO) | ~9% | **nenhum**: fica mais lento |
 | [Apache Commons Math](https://github.com/apache/commons-math) | Java + Maven | 84 s (MEDIDO) | mediana de **93%** das classes | **nenhum**: o custo fixo empata |
-| [Bitwarden clients](https://github.com/bitwarden/clients) | Angular + Jest | ~23 min de testes no CI deles | **43%** (SIMULADO, 15 commits) | ~23 → ~13 min (PROJEÇÃO), menos ~2,4 min da ferramenta |
+| [Bitwarden clients](https://github.com/bitwarden/clients) | Angular + Jest | 232 min de espera em 15 commits (MEDIDO, CI) | **43%** (15 commits) | **−38% na espera do PR, −33% em minutos de CI** (MEDIDO no GitHub Actions) |
 
 **A conclusão principal:** a seleção funciona bem em código modular, mas só **economiza tempo** quando a suíte é longa comparada ao custo fixo da ferramenta (~15 s a 2 min, conforme o tamanho do repositório). Em suítes de segundos ou de 1 a 2 minutos ela não compensa. Em suítes de dezenas de minutos (Cypress, testes de integração), compensa.
 
@@ -233,9 +233,41 @@ Das 6 vezes em que rodou tudo, 3 foram por dependências ou workflow do CI e 3 p
 
 **O commit sem testes (`5b775536fd`) foi conferido à mão.** Ele refatora três componentes do portal de provedores, e nenhum teste Jest os alcança, nem diretamente nem pelo módulo que os registra. Só os stories do Storybook os usam. O único teste com nome parecido (`members.component.spec.ts`) testa outro `MembersComponent`, de outra pasta. Ou seja, a seleção está certa: esse código não tem teste automatizado no projeto.
 
-**Tempo (PROJEÇÃO):** os testes Jest do CI deles somam ~23 min por run (Libs 16,5 + Web 3,1 + Browser 2,5 + Desktop 1,0 + CLI 0,3). Evitando 43% dos testes, ficariam ~13 min. A projeção supõe que todos os testes custam o mesmo, o que não é verdade, e não foi medida.
+### Tempo medido no GitHub Actions (MEDIDO)
 
-**Custo da ferramenta:** ~2,4 min por commit em média neste computador (Windows), porque o grafo tem 7.700 arquivos. Montar o grafo do zero levou 351 s.
+**Como:** um workflow num fork ([Pedronovaesdev/clients](https://github.com/Pedronovaesdev/clients), branch `medicao`, [run](https://github.com/Pedronovaesdev/clients/actions/runs/39848533926)) rodou os 15 commits nos mesmos 5 grupos do CI do Bitwarden, com o mesmo comando e as mesmas opções (`npm test -- <pastas> --coverage --maxWorkers=2 --workerIdleMemoryLimit=1500MiB`, `ubuntu-22.04`).
+
+- Em cada job, na mesma máquina, rodou primeiro a suíte completa do grupo e depois só os testes escolhidos que caem nele.
+- O cache do Jest foi limpo antes de cada execução, para nenhuma herdar a compilação da outra.
+- O grafo veio de um cache montado antes, como num CI em uso.
+- O tempo da seleção (uma vez por commit) entra no tempo da seletiva.
+
+**Duas formas de contar:**
+- **parede:** quanto o PR espera; os 5 grupos rodam em paralelo, então vale o mais lento;
+- **máquina:** soma dos 5 grupos; é o que se paga em minutos de CI.
+
+| Commit | Seleção | Completa (parede) | Com a ferramenta (parede) | Completa (máquina) | Com a ferramenta (máquina) |
+|---|---|---|---|---|---|
+| 49a6fabee4 | 33 s | 18m24s | **6m12s** | 27m03s | **13m42s** |
+| 1e4eef19bd | 33 s | 15m03s | **5m27s** | 21m58s | **11m25s** |
+| 40a5d481f1 | 22 s | 14m02s | 14m25s (suíte completa) | 21m39s | 22m10s |
+| 0ad8f11a67 | 32 s | 19m45s | 20m05s (suíte completa) | 28m15s | 28m39s |
+| 9904c0a193 | 33 s | 15m18s | 13m37s | 23m09s | 21m19s |
+| 16a22195c5 | 31 s | 19m25s | 21m02s (suíte completa) | 27m55s | 29m42s |
+| 18d6d9f10c | 25 s | 18m45s | 19m29s (suíte completa) | 26m07s | 26m50s |
+| 2e473d7133 | 32 s | 18m20s | **1m41s** | 25m57s | **3m47s** |
+| 5b775536fd | 16 s | 13m15s | **0m22s** | 19m29s | **0m28s** |
+| 44b120f667 | 26 s | 15m10s | **0m48s** | 23m03s | **1m00s** |
+| 589d8b50ef | 31 s | 11m52s | 12m19s (suíte completa) | 19m26s | 19m57s |
+| 9a03963fa0 | 16 s | 11m34s | **4m07s** | 18m34s | **10m14s** |
+| 162fc00f96 | 31 s | 12m12s | 12m29s (suíte completa) | 19m22s | 19m41s |
+| ea6c9e20bc | 29 s | 16m53s | **6m10s** | 24m14s | **12m29s** |
+| 98b19b848b | 29 s | 12m23s | **4m53s** | 19m47s | **11m14s** |
+| **Total** | | **232 min** | **143 min (−38%)** | **346 min** | **233 min (−33%)** |
+
+- **Nos 9 commits em que a ferramenta selecionou testes** (ou nenhum), o PR esperou de 0,4 a 13,6 min, contra 11,6 a 18,4 min com tudo. Em 4 deles, caiu de mais de 13 min para menos de 2 min.
+- **Nos 6 que rodaram tudo** (dependências, workflow do CI, traduções), o custo extra foi de ~20 a 30 s, o tempo da seleção. A diferença maior em `16a22195c5` (+1,6 min) é variação entre execuções da suíte completa, não custo da ferramenta.
+- **O tempo da ferramenta no Linux do CI** foi de 16 a 33 s por commit. No Windows local tinha sido ~2,4 min. O grafo do zero levou 100 s, contra 351 s no Windows.
 
 ### Problemas encontrados e corrigidos
 
@@ -299,5 +331,5 @@ Estes não foram rodados, mas o CI deles foi analisado:
 
 - **Segurança contra bugs reais:** a análise de mutantes (injetar bugs e ver se a seleção os pega) ficou pendente nos projetos open source. Nas demos, 5 de 5 bugs injetados foram pegos.
 - **Tempo no CI:** nos projetos da empresa, o tempo seletivo é medido localmente ou projetado; falta a medição dentro do CI.
-- **Custo da ferramenta em repositórios grandes:** no Bitwarden, ~2,4 min por commit no Windows. Falta medir no Linux do CI, onde o acesso a arquivos é mais rápido.
+- **Tempo medido em CI:** só no Bitwarden. Nos projetos da empresa, o tempo seletivo ainda é medido localmente ou projetado.
 - **Testes que chamam a aplicação por URL/HTTP** (`@SpringBootTest`, testes de integração GraphQL) não têm ligação no código com o que testam. A ferramenta os roda sempre, e isso define o piso de economia.
