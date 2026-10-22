@@ -1,0 +1,28 @@
+# Configuracao de linguagem: Angular + Jest (jest-preset-angular).
+# Igual a typescript, mais os arquivos que pertencem a um componente.
+extends: typescript
+name: angular
+
+# Template e estilos sao ligados ao componente por `templateUrl`/`styleUrls`
+# (uma string, sem import no AST). Mudar `x.component.html` conta como mudar
+# `x.component.ts`: rodam os testes de quem usa o componente. Se o .ts dono
+# nao existir no grafo, cai na suite completa.
+ignore_patterns:
+  - "**/*.md"
+  - "**/*.rst"
+  - "**/*.adoc"
+  - "docs/**"
+  - "**/LICENSE*"
+  - "**/.gitignore"
+  - "**/.gitattributes"
+  - "**/.editorconfig"
+  # Storybook: paginas de demonstracao. Ninguem as importa e o Jest nao as
+  # roda; sem isto, cairiam em no-dependents (suite completa).
+  - "**/*.stories.ts"
+  - "**/*.mdx"
+
+owner_files:
+  - { file: ".html", owner: ".ts" }
+  - { file: ".scss", owner: ".ts" }
+  - { file: ".css", owner: ".ts" }
+  - { file: ".less", owner: ".ts" }

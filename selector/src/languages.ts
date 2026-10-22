@@ -86,6 +86,12 @@ export interface LanguageConfig {
    */
   companionTests: CompanionTest[];
   /**
+   * Arquivo que nao e codigo mas pertence a um arquivo de codigo. Ex.: no
+   * Angular, `x.component.html` e o template de `x.component.ts` (via
+   * `templateUrl`). Mudar o template conta como mudar o componente.
+   */
+  ownerFiles: OwnerFile[];
+  /**
    * Pasta (relativa ao projeto) onde o comando de teste roda, em monorepos.
    * Os caminhos dos testes no comando ficam relativos a ela.
    */
@@ -115,6 +121,21 @@ export interface CompanionTest {
 export function companionTestFor(lang: LanguageConfig, file: string): string | null {
   for (const c of lang.companionTests) {
     if (file.endsWith(c.source)) return file.slice(0, -c.source.length) + c.test;
+  }
+  return null;
+}
+
+export interface OwnerFile {
+  /** sufixo do arquivo dependente, ex.: ".component.html" */
+  file: string;
+  /** sufixo do arquivo de codigo dono dele, ex.: ".component.ts" */
+  owner: string;
+}
+
+/** Arquivo de codigo dono de `file` (`x.component.html` -> `x.component.ts`), ou null. */
+export function ownerFor(lang: LanguageConfig, file: string): string | null {
+  for (const o of lang.ownerFiles) {
+    if (file.endsWith(o.file)) return file.slice(0, -o.file.length) + o.owner;
   }
   return null;
 }
@@ -194,6 +215,17 @@ function companionList(raw: Record<string, unknown>): CompanionTest[] {
   });
 }
 
+function ownerList(raw: Record<string, unknown>): OwnerFile[] {
+  const value = raw.owner_files;
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error("campo 'owner_files' deve ser uma lista");
+  return value.map((item) => {
+    const obj = item as Record<string, unknown>;
+    if (!obj.file || !obj.owner) throw new Error("owner_files: cada item precisa de 'file' e 'owner'");
+    return { file: String(obj.file), owner: String(obj.owner) };
+  });
+}
+
 function languageFile(nameOrPath: string, relativeTo = process.cwd()): string {
   return path.extname(nameOrPath) ? path.resolve(relativeTo, nameOrPath) : path.join(LANGUAGES_DIR, `${nameOrPath}.yml`);
 }
@@ -251,6 +283,7 @@ export function loadLanguage(nameOrPath: string): LanguageConfig {
     polymorphicRelations: new Set(stringList(raw, "polymorphic_relations")),
     scopeFiles: scopeList(raw),
     companionTests: companionList(raw),
+    ownerFiles: ownerList(raw),
     cwd: raw.cwd === undefined || raw.cwd === null ? null : String(raw.cwd).replace(/\/+$/, ""),
     alwaysRunMarkers: stringList(raw, "always_run_markers"),
   };

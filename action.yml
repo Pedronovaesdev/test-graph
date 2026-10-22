@@ -19,7 +19,7 @@ inputs:
     required: false
     default: "."
   lang:
-    description: "typescript, vitest, java, java-gradle ou python. Vazio = detecta pelo arquivo de build."
+    description: "typescript, angular, vitest, java, java-gradle ou python, ou o caminho de um .yml do projeto. Vazio = detecta pelo arquivo de build."
     required: false
     default: ""
   dry-run:
