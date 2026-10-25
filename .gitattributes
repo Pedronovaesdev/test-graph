@@ -7,3 +7,7 @@ mvnw      text eol=lf
 *.cmd     text eol=crlf
 *.jar     binary
 *.pptx    binary
+
+# Bundle gerado pelo esbuild: LF em qualquer SO (o CI compara byte a byte com
+# um build novo) e recolhido nos diffs de PR.
+selector/dist/cli.js text eol=lf linguist-generated=true
