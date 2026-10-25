@@ -102,9 +102,11 @@ test-graph-selector/
 │   ├── release.yml                 publica o pacote no npm (disparo manual)
 │   └── action-selftest.yml         testa a GitHub Action (action.yml) com uses: ./
 │
-├── docs/ARQUITETURA.md             este documento
-└── legacy/                         versão antiga (motor em Java). Não é usada.
+└── docs/ARQUITETURA.md             este documento
 ```
+
+A versão antiga (motor em Java) foi removida do repositório e está na tag
+`legacy-java`.
 
 Duas pastas são geradas e nunca vão para o Git:
 

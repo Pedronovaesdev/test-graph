@@ -24,6 +24,3 @@ demo/.work/
 *.iml
 
 ./venv
-
-# Exemplos antigos: cada um e um repositorio git proprio (historico interno)
-legacy/examples/
