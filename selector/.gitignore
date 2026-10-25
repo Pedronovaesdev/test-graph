@@ -1,3 +1,6 @@
 node_modules/
-dist/
+# dist/cli.js e versionado (a Action usa direto, sem npm ci nem build);
+# o resto do dist/ e saida de builds antigos.
+dist/*
+!dist/cli.js
 *.tgz

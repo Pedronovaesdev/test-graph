@@ -82,7 +82,7 @@ test-graph-selector/
 │   │   ├── java-gradle.yml         Java + JUnit + Gradle (inclui Spring)
 │   │   └── python.yml              Python + pytest
 │   ├── tests/                      testes Jest da ferramenta (46)
-│   ├── dist/                       JavaScript compilado (gerado, fora do Git)
+│   ├── dist/cli.js                 seletor empacotado pelo esbuild (versionado)
 │   ├── package.json                configuração do pacote npm
 │   └── README.md                   página do pacote no npm
 │
@@ -263,8 +263,12 @@ ordem certa. (O `select-tests.sh` da raiz é só um atalho de uma linha para ele
 **O que ele faz, em ordem:**
 
 1. **Valida** `git`, a pasta do projeto, a linguagem e o `.yml` correspondente.
-2. **Compila o seletor** se o `dist/` não existir ou estiver mais velho que `src/`
-   (só no repositório; no pacote npm o `dist/` já vem pronto).
+2. **Usa o seletor pronto** em `dist/cli.js`, um arquivo único gerado pelo esbuild
+   com o `yaml` embutido e versionado no Git. Só compila se ele faltar ou, numa
+   máquina de desenvolvimento (com `node_modules`), se algum `src/*.ts` for mais
+   novo. Num clone novo as datas dos arquivos são as do checkout, então essa
+   comparação fica de fora; `TGS_NO_BUILD=1` desliga a compilação de vez (a
+   Action e o CI usam).
 3. **Gera o grafo do head** (função `build_graph`):
    - se o commit é o que está aberto na pasta, roda o graphify ali mesmo
      (aproveitando o cache);
@@ -644,7 +648,7 @@ selective   (5 demos em paralelo) ──┘
 
 | Job | O que faz |
 |---|---|
-| `tool-tests` | instala, roda os 46 testes Jest da ferramenta e compila |
+| `tool-tests` | instala, roda os testes Jest da ferramenta, compila e confere se o `dist/cli.js` versionado bate com o build novo |
 | `full-suite` | para cada demo, roda **todos** os testes e mede o tempo (referência) |
 | `selective` | para cada demo, roda `select-tests.sh` e mede o tempo; o relatório vai para o Job Summary |
 | `compare` | espera os dois anteriores e escreve a tabela "completo × seletivo" no Summary |
@@ -661,7 +665,8 @@ Passos importantes do job `selective`:
    Windows.
 3. **`pip install -r requirements.txt`**: instala o graphify. Ele **não** é
    instalado automaticamente pela ferramenta, só chamado por ela.
-4. **`npm ci && npm run build`** em `selector/`: compila o seletor.
+4. **Nada de `npm ci` nem build do seletor**: usa o `selector/dist/cli.js`
+   versionado, como a Action (`TGS_NO_BUILD=1`).
 5. **Dependências do demo** (`npm ci` no TypeScript, `pip install` no Python;
    Maven/Gradle baixam sozinhos).
 6. **`actions/cache`** em `graphify-out/`: reaproveita a extração por arquivo entre
@@ -758,17 +763,17 @@ A pasta `selector/` é o pacote `test-graph-selector` (~21 kB, 14 arquivos):
 ```text
 test-graph-selector-1.0.0.tgz
 ├── bin/select-tests.sh      comando `select-tests`
-├── dist/*.js                comando `test-graph-selector` (= cli.ts compilado)
+├── dist/cli.js              comando `test-graph-selector` (src/ + yaml num arquivo só)
 ├── languages/*.yml
 ├── package.json
 └── README.md
 ```
 
-- O código-fonte (`src/`) e os testes **não** vão no pacote. O `prepack` compila o
-  `dist/` antes de empacotar.
+- O código-fonte (`src/`) e os testes **não** vão no pacote. O `prepack` recompila o
+  `dist/cli.js` (checagem de tipos com `tsc` + bundle com `esbuild`) antes de empacotar.
 - O script descobre a própria pasta seguindo symlinks, porque o npm instala o
   comando como link. Assim ele funciona dentro de `node_modules/`.
-- A única dependência de runtime é `yaml`, instalada junto.
+- Não tem dependências de runtime: o `yaml` vai embutido no `dist/cli.js`.
 - Precisa de `bash`: funciona direto em Linux/macOS/CI; no Windows, pelo Git Bash.
 
 Para testar sem publicar:

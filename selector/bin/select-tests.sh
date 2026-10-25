@@ -18,6 +18,7 @@
 #   GRAPHIFY    executavel do indexador (padrao: graphify)
 #   NODE        executavel do Node (padrao: node)
 #   FULL_SUITE_COMMAND  sobrescreve o comando da suite completa
+#   TGS_NO_BUILD=1      usa o dist/cli.js como esta, sem nunca recompilar
 
 set -euo pipefail
 
@@ -202,9 +203,17 @@ selector() { "$NODE" "$SELECTOR_DIR/dist/cli.js" "$@"; }
 
 # --- 2. ferramenta: seletor compilado + indexador --------------------------
 command -v "$NODE" >/dev/null 2>&1 || fail_safe "node nao encontrado"
-# Compila se faltar o dist/ ou se algum fonte for mais novo que ele (evita
-# rodar uma versao velha do seletor depois de editar selector/src).
-if [[ -d "$SELECTOR_DIR/src" ]] && { [[ ! -f "$SELECTOR_DIR/dist/cli.js" ]]    || [[ -n "$(find "$SELECTOR_DIR/src" -name '*.ts' -newer "$SELECTOR_DIR/dist/cli.js" 2>/dev/null | head -1)" ]]; }; then
+# O dist/cli.js vem pronto (versionado e no pacote npm). Compila so se ele
+# faltar ou, numa maquina de desenvolvimento (com node_modules), se algum fonte
+# for mais novo que ele. Num clone novo as datas dos arquivos sao as do
+# checkout, entao a comparacao por data fica de fora. TGS_NO_BUILD=1 nunca compila.
+needs_build() {
+  [[ "${TGS_NO_BUILD:-0}" == "1" || ! -d "$SELECTOR_DIR/src" ]] && return 1
+  [[ ! -f "$SELECTOR_DIR/dist/cli.js" ]] && return 0
+  [[ -d "$SELECTOR_DIR/node_modules" ]] \
+    && [[ -n "$(find "$SELECTOR_DIR/src" -name '*.ts' -newer "$SELECTOR_DIR/dist/cli.js" 2>/dev/null | head -1)" ]]
+}
+if needs_build; then
   log "compilando o seletor"
   (cd "$SELECTOR_DIR" && { [[ -d node_modules ]] || npm ci --silent; } && npm run --silent build) >&2 \
     || fail_safe "nao consegui compilar o seletor"

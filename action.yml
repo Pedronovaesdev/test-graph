@@ -63,14 +63,14 @@ runs:
         "$RUNNER_TEMP/tgs-venv/bin/pip" install --quiet "graphifyy==$GRAPHIFY_VERSION"
         echo "GRAPHIFY=$RUNNER_TEMP/tgs-venv/bin/graphify" >> "$GITHUB_ENV"
 
-    # Usa o Node que ja estiver no runner (nao troca a versao do projeto).
-    - name: Compilar o seletor
+    # O seletor vem pronto em selector/dist/cli.js (um arquivo so, com as
+    # dependencias embutidas): nada de npm ci nem build aqui. Usa o Node que ja
+    # estiver no runner (nao troca a versao do projeto).
+    - name: Conferir o Node
       shell: bash
-      working-directory: ${{ github.action_path }}/selector
       run: |
         command -v node >/dev/null || { echo "::error::Node.js nao encontrado. Adicione actions/setup-node antes desta Action."; exit 2; }
-        npm ci --silent --no-audit --no-fund
-        npm run build --silent
+        node --version
 
     # Cache por conteudo de arquivo do graphify. O grafo em si (graph.json) e
     # sempre regerado para o commit analisado; so a extracao de cada arquivo e
@@ -118,6 +118,7 @@ runs:
       shell: bash
       env:
         TGS: ${{ github.action_path }}/selector/bin/select-tests.sh
+        TGS_NO_BUILD: "1"
         BASE: ${{ steps.base.outputs.sha }}
         HEAD_REF: ${{ inputs.head }}
         PROJECT: ${{ inputs.project }}

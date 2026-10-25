@@ -26,6 +26,14 @@ jobs:
       - run: npm ci
       - run: npm test -- --ci
       - run: npm run build
+      # A Action e o job `selective` usam o dist/cli.js versionado. Se alguem
+      # mudou o src/ sem rodar `npm run build`, o bundle commitado ficou velho.
+      - name: Conferir se o dist/cli.js versionado esta atualizado
+        run: |
+          git diff --exit-code -- dist/cli.js || {
+            echo "::error file=selector/dist/cli.js::dist/cli.js desatualizado. Rode 'cd selector && npm run build' e commite o resultado."
+            exit 1
+          }
 
   # Referencia: a suite inteira, sempre.
   full-suite:
@@ -140,9 +148,6 @@ jobs:
           cache: maven
       - name: Instalar o indexador AST (graphify)
         run: pip install -r requirements.txt
-      - name: Compilar o seletor
-        working-directory: selector
-        run: npm ci && npm run build
       - name: Instalar dependencias do projeto
         if: matrix.lang == 'typescript'
         working-directory: ${{ matrix.project }}
@@ -174,7 +179,10 @@ jobs:
             base="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
           fi
           echo "sha=$base" >> "$GITHUB_OUTPUT"
+      # Usa o selector/dist/cli.js versionado, como a Action: sem npm ci nem build.
       - name: Testes seletivos
+        env:
+          TGS_NO_BUILD: "1"
         run: |
           start=$(date +%s)
           ./select-tests.sh \

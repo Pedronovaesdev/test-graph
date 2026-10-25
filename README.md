@@ -146,7 +146,8 @@ jobs:
           dry-run: true               # comece só observando o que seria escolhido
 ```
 
-A Action instala o graphify num venv próprio, compila o seletor, restaura o cache
+A Action instala o graphify num venv próprio, usa o seletor já empacotado
+(`selector/dist/cli.js`, sem `npm ci` nem build), restaura o cache
 do indexador, calcula a base (base do PR, ou o commit anterior ao push), roda a
 seleção e executa os testes. O relatório aparece no **Job Summary** do run.
 
@@ -218,7 +219,7 @@ No Windows, use o Git Bash.
 git clone https://github.com/Pedronovaesdev/test-graph.git
 cd test-graph
 pip install -r requirements.txt            # graphifyy==0.9.90 (indexador AST)
-(cd selector && npm ci && npm run build)   # opcional: o script compila sozinho se faltar
+# o seletor já vem compilado em selector/dist/cli.js: não precisa de npm install
 
 # Ver o que seria rodado no seu projeto, sem executar nada
 ./select-tests.sh --project ../meu-projeto --base origin/main --dry-run
@@ -276,7 +277,8 @@ node selector/dist/cli.js query --graph demo/ts-project/graphify-out/graph.json 
 
 > [!NOTE]
 > **Pacote npm:** o `selector/` já está pronto para ser publicado como `test-graph-selector`
-> (binários `select-tests` e `test-graph-selector`), mas ainda não está no registro.
+> (binários `select-tests` e `test-graph-selector`, sem dependências de runtime), mas ainda
+> não está no registro.
 > Para instalar localmente: `cd selector && npm pack && npm install -g ./test-graph-selector-1.0.0.tgz`.
 
 ## 🧩 Linguagens suportadas
@@ -583,6 +585,7 @@ resolve a classe `Clock` (colide com `java.time.Clock`), e sem essa regra o resu
 │   ├── bin/select-tests.sh       orquestrador: diff → grafo → seleção → execução
 │   ├── bin/graphify-fast.py      wrapper do graphify (≈3x mais rápido, corrige extends do tsconfig)
 │   ├── src/                      cli · diff · languages · graph · rules · engine · report
+│   ├── dist/cli.js               seletor empacotado (esbuild), versionado: usado direto pela Action
 │   ├── languages/                typescript · vitest · angular · java · java-gradle · python
 │   └── tests/                    testes da ferramenta (grafos montados à mão)
 ├── demo/                         ts · java · java-gradle · python · spring + compare.sh e prove-safety.sh
@@ -609,6 +612,9 @@ resolve a classe `Clock` (colide com `java.time.Clock`), e sem essa regra o resu
 git tag v1.0.1 && git tag -f v1
 git push origin v1.0.1 && git push -f origin v1
 ```
+
+**Mudou algo em `selector/src/`?** Rode `cd selector && npm ci && npm run build` e commite o
+`dist/cli.js` junto. O CI falha se o bundle versionado não bater com um build novo.
 
 **npm:** crie o secret `NPM_TOKEN` (token *Automation* do npmjs.com), suba a versão e rode
 o workflow **Release (npm)** a partir da tag, na aba *Actions*. A publicação é manual de
