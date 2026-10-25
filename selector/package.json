@@ -1,6 +1,6 @@
 {
   "name": "test-graph-selector",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Selecao deterministica de testes por grafo de dependencias (AST): roda so os testes afetados por um diff, explicando o porque.",
   "keywords": [
     "test-selection",
