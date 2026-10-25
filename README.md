@@ -1,27 +1,35 @@
+<div align="center">
+
+<img src="docs/assets/logo.svg" alt="test-graph-selector" width="110" />
+
 # test-graph-selector
 
-Seleção **determinística** de testes: a partir de um diff do Git, descobre quais
-arquivos, símbolos e testes foram afetados (análise AST + grafo de dependências)
-e executa **somente os testes relacionados**, explicando a cadeia que levou a
-cada um. Sem IA no núcleo: mesma entrada, mesma saída, byte a byte.
+**Rode só os testes que o seu diff pode ter quebrado, e saiba exatamente por quê.**
 
-- Linguagens validadas (cada uma com projeto demo, `compare.sh` e prova de segurança):
+Seleção de testes determinística por grafo de dependências (AST). Sem IA no núcleo:
+mesma entrada, mesma saída, byte a byte.
 
-  | `--lang` | Linguagem | Testes / build |
-  |---|---|---|
-  | `typescript` | TypeScript / JavaScript (principal) | Jest |
-  | `vitest` | TypeScript / JavaScript (Next.js, Vite) | Vitest |
-  | `java` | Java | JUnit 5 + Maven |
-  | `java-gradle` | Java | JUnit 5 + Gradle (wrapper `./gradlew`) |
-  | `python` | Python | pytest |
-  | `java-gradle` | Spring Boot (demo `spring`) | JUnit 5 + Gradle + `@SpringBootTest`/`@WebMvcTest` |
+[![Selective tests](https://github.com/Pedronovaesdev/test-graph/actions/workflows/selective-tests.yml/badge.svg)](https://github.com/Pedronovaesdev/test-graph/actions/workflows/selective-tests.yml)
+[![Action self-test](https://github.com/Pedronovaesdev/test-graph/actions/workflows/action-selftest.yml/badge.svg)](https://github.com/Pedronovaesdev/test-graph/actions/workflows/action-selftest.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](selector/package.json)
+[![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](selector/package.json)
+[![Indexed by graphify](https://img.shields.io/badge/indexed%20by-graphify%200.9.90-6f42c1)](https://github.com/Graphify-Labs/graphify)
 
-- O seletor é escrito em **TypeScript** (`selector/`) e testado com **Jest**.
-- A CLI de pipeline é um **Shell Script** (`select-tests.sh`).
-- Integração pronta com **GitHub Actions** (`.github/workflows/selective-tests.yml`).
+[![TypeScript](https://img.shields.io/badge/TypeScript-Jest%20%7C%20Vitest-3178C6?logo=typescript&logoColor=white)](selector/languages/typescript.yml)
+[![Angular](https://img.shields.io/badge/Angular-Jest-DD0031?logo=angular&logoColor=white)](selector/languages/angular.yml)
+[![Java](https://img.shields.io/badge/Java-Maven%20%7C%20Gradle-ED8B00?logo=openjdk&logoColor=white)](selector/languages/java.yml)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-supported-6DB33F?logo=springboot&logoColor=white)](demo/spring-project)
+[![Python](https://img.shields.io/badge/Python-pytest-3776AB?logo=python&logoColor=white)](selector/languages/python.yml)
 
-> Explicação completa do sistema (cada pasta, cada arquivo, o CI e os limites):
-> [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
+[Como funciona](#-como-funciona) ·
+[No CI](#-no-ci-github-action) ·
+[No seu PC](#-no-seu-pc) ·
+[Resultados](#-resultados-em-projetos-reais) ·
+[Arquitetura](docs/ARQUITETURA.md)
+
+</div>
+
+---
 
 ```text
 $ ./select-tests.sh --project demo/ts-project --base HEAD~1 --head HEAD
@@ -38,43 +46,63 @@ Testes selecionados e por que:
 Comando: npx jest --ci --passWithNoTests --runTestsByPath tests/barrel.test.ts tests/cart.test.ts tests/math.test.ts
 ```
 
-## Como funciona
+## ✨ Destaques
 
-```text
- git diff base...head          graphify extract (AST)          selector (TypeScript)
-┌────────────────────┐        ┌────────────────────┐        ┌──────────────────────────┐
-│ A/M/D/R + caminhos │──┐     │ graph.json do head │──┐     │ 1. regras de segurança   │
-└────────────────────┘  │     │ (+ do base, se há  │  ├────▶│ 2. sementes = nós dos    │
-                        └────▶│  remoção/renomeio) │  │     │    arquivos alterados    │
-                              └────────────────────┘  │     │ 3. BFS reversa sem limite│
-                                                      │     │ 4. filtra nós de teste   │
-                                                      │     │ 5. relatório + comando   │
-                                                      │     └────────────┬─────────────┘
-                                                      │                  ▼
-                                                      │     npx jest --runTestsByPath ...
-                                                      │     mvn test -Dtest=...
+- 🎯 **Seleção por dependência real.** Lê o código (AST), monta o grafo de quem importa, chama, herda ou implementa quem e anda nele ao contrário a partir do que mudou, sem limite de profundidade.
+- 🔍 **Explicável.** Cada teste vem com a cadeia completa até o arquivo alterado, em texto (log), JSON (máquina) e Markdown (Job Summary do GitHub).
+- 🛡️ **Seguro por padrão.** Na dúvida, roda mais. Config, lockfile, código que o grafo não explica ou qualquer erro da ferramenta levam à **suíte completa**. Um erro nunca significa teste pulado.
+- ♻️ **Determinístico.** Sem IA, sem heurística aleatória. O mesmo commit gera o mesmo relatório.
+- 🧩 **Multilinguagem por configuração.** Uma linguagem nova é um arquivo YAML, sem mudar código.
+- ⚙️ **Pronto para CI.** GitHub Action de um passo, com cache do indexador e o relatório no Job Summary.
+
+## 🧭 Como funciona
+
+```mermaid
+flowchart LR
+    A["git diff<br/>base...head"] --> C
+    B["graphify extract<br/>(AST → graph.json)"] --> C
+    subgraph C["selector (TypeScript)"]
+        direction TB
+        C1["1. regras de segurança<br/>por arquivo"] --> C2["2. sementes =<br/>nós dos arquivos alterados"]
+        C2 --> C3["3. BFS reversa<br/>sem limite"]
+        C3 --> C4["4. filtra os nós<br/>que são teste"]
+        C4 --> C5["5. relatório<br/>+ comando"]
+    end
+    C --> D["npx jest / mvn test /<br/>./gradlew test / pytest"]
+    C -.->|"falhou ou na dúvida"| E["suíte completa"]
 ```
 
-1. **Diff** (`selector/src/diff.ts`): `git diff --name-status -z -M base...head`.
-   Renomeação traz os dois caminhos; remoção é tratada como tal.
-2. **Grafo** (indexador externo): `graphify extract <projeto> --no-cluster` gera
-   `graphify-out/graph.json` com nós (arquivos, classes, funções, métodos) e
-   arestas (`imports`, `calls`, `inherits`, `implements`, `contains`, `method`...).
-   Uma aresta `A → B` significa **"A depende de B"**. O grafo é sempre do commit
-   analisado; quando o diff remove ou renomeia arquivos, o script também indexa
-   o merge-base (via `git worktree`) e as duas buscas são unidas.
-3. **Regras** (`selector/src/rules.ts`): decidem, arquivo a arquivo, se a mudança
-   vira semente da busca, seleção direta, suíte completa ou nada. Ver
-   [Regras de segurança](#regras-de-segurança).
-4. **Busca reversa** (`selector/src/graph.ts`): BFS seguindo arestas de entrada
-   ("quem depende de mim"), **sem limite de profundidade**, a partir de
-   **várias sementes**, guardando o pai de cada nó para reconstruir a cadeia
-   completa. A consulta no sentido direto ("de quem eu dependo") também é exposta.
-5. **Seleção + relatório** (`selector/src/engine.ts`, `report.ts`): nós cujo
-   arquivo é de teste viram testes selecionados; o relatório sai em texto (log do
-   CI), JSON (máquina) e Markdown (Job Summary / comentário de PR).
+Uma aresta `A → B` no grafo significa **"A depende de B"**. Partindo dos símbolos do
+arquivo alterado e seguindo as setas ao contrário, a busca chega em todo teste que
+depende dele, direta ou indiretamente:
 
-### Por que não usar o `graphify affected`
+```mermaid
+flowchart RL
+    add["add()<br/>src/utils/math.ts"]:::changed
+    total["Cart.total()"] -- calls --> add
+    cart["Cart"] -- method --> total
+    cartts["src/services/cart.ts"] -- contains --> cart
+    ct["tests/cart.test.ts"]:::test -- imports --> cartts
+    bt["tests/barrel.test.ts"]:::test -- "imports (via index.ts)" --> add
+    mt["tests/math.test.ts"]:::test -- imports --> add
+    ut["tests/user.test.ts"]:::skip
+    classDef changed fill:#f97316,color:#fff,stroke:#c2410c
+    classDef test fill:#22c55e,color:#fff,stroke:#15803d
+    classDef skip fill:#e5e7eb,color:#6b7280,stroke:#9ca3af
+```
+
+<sub>🟧 alterado · 🟩 selecionado · ⬜ não afetado (fica de fora)</sub>
+
+1. **Diff** ([`diff.ts`](selector/src/diff.ts)): `git diff --name-status -z -M base...head`. Renomeação traz os dois caminhos.
+2. **Grafo** (indexador externo): `graphify extract --no-cluster` gera nós (arquivos, classes, funções, métodos) e arestas (`imports`, `calls`, `inherits`, `implements`, `contains`, `method`…). Com remoção ou renomeação, o merge-base também é indexado (via `git worktree`) e as duas buscas são unidas.
+3. **Regras** ([`rules.ts`](selector/src/rules.ts)): decidem, arquivo a arquivo, se a mudança vira semente, seleção direta, suíte completa ou nada.
+4. **Busca reversa** ([`graph.ts`](selector/src/graph.ts)): BFS a partir de várias sementes, guardando o pai de cada nó para reconstruir a cadeia. Interfaces e herança são seguidas também no sentido direto (polimorfismo / injeção de dependência).
+5. **Seleção e relatório** ([`engine.ts`](selector/src/engine.ts), [`report.ts`](selector/src/report.ts)): os nós de teste viram o comando do runner da linguagem.
+
+<details>
+<summary><b>Por que não usar o <code>graphify affected</code>? Por que <code>--no-cluster</code>?</b></summary>
+
+<br/>
 
 O graphify tem um comando de impacto, mas ele aceita uma semente só, para na
 profundidade 2 por padrão (corta cadeias como `add() → Cart.total() → cart.ts →
@@ -82,64 +110,21 @@ cart.test.ts`) e não devolve o caminho. Por isso o graphify é usado **apenas c
 indexador AST**; diff, busca, regras, seleção, relatório, shell e CI são código
 deste repositório.
 
-### Por que `--no-cluster`
-
-No modo padrão o graphify guarda o grafo como não-direcionado internamente e
-colapsa arestas opostas entre o mesmo par de nós: num ciclo de import `a.ts ↔ b.ts`
-uma das direções some. Com `--no-cluster` ele grava a extração crua (chave `edges`),
+No modo padrão, o graphify guarda o grafo como não-direcionado e colapsa arestas
+opostas entre o mesmo par de nós: num ciclo de import `a.ts ↔ b.ts`, uma das
+direções some. Com `--no-cluster` ele grava a extração crua (chave `edges`),
 direcionada e sem esse colapso. Verificado na v0.9.90: é um superconjunto das
-arestas do modo padrão e é byte a byte determinístico.
+arestas do modo padrão e é determinístico byte a byte.
 
-## Instalação
+</details>
 
-Requisitos: **Git**, **Node.js 18+**, **Python 3.10+** (para o indexador) e o
-toolchain do projeto testado: Node/Jest, Java 17+ com Maven (Gradle vem pelo
-wrapper `./gradlew`) ou Python com pytest.
+## 🚀 No CI (GitHub Action)
 
-```bash
-pip install -r requirements.txt          # graphifyy==0.9.90 (indexador AST)
-(cd selector && npm ci && npm run build) # seletor (o script compila sozinho se faltar)
-```
-
-Variáveis opcionais: `GRAPHIFY` (caminho do executável do indexador),
-`NODE`, `FULL_SUITE_COMMAND` (sobrescreve o comando de suíte completa).
-
-## Uso
-
-```bash
-./select-tests.sh --base origin/main --head HEAD \
-  [--project DIR] [--lang typescript|java] [--dry-run] [--format text|json|md] [--out-dir DIR]
-```
-
-| Opção | Padrão | Descrição |
-|---|---|---|
-| `--base` | (obrigatório) | Commit/branch de comparação. O diff é `base...head` (desde o merge-base). |
-| `--head` | `HEAD` | Commit analisado. Se for o checkout atual, indexa no lugar; senão usa um worktree. |
-| `--project` | `.` | Diretório do projeto (pode ser um subdiretório do repo, ex.: monorepo). |
-| `--lang` | autodetecta | `package.json` + `vitest.config.*` → `vitest`; `package.json` → `typescript`; `pom.xml` → `java`; `build.gradle(.kts)` → `java-gradle`; `pyproject.toml`/`setup.py`/`pytest.ini` → `python`. |
-| `--dry-run` | — | Só seleciona e explica; não executa testes. |
-| `--format` | `text` | Formato impresso no stdout. Os três ficam em `--out-dir`. |
-| `--out-dir` | `<projeto>/.selector-out` | `report.{txt,json,md}`, `selected-tests.txt`, `command.txt`, `mode.txt`. |
-
-**Códigos de saída:** `0` testes passaram (ou nada a rodar) · `1` testes falharam ·
-`2` erro da ferramenta sem como testar (ex.: `--dry-run`, argumento inválido).
-Se a seleção falhar por qualquer motivo (indexador ausente, grafo inválido, erro
-do seletor), o script **cai para a suíte completa**: erro da ferramenta nunca
-significa testes pulados.
-
-Consultar o grafo diretamente (nos dois sentidos):
-
-```bash
-node selector/dist/cli.js query --graph demo/ts-project/graphify-out/graph.json add --transitive
-node selector/dist/cli.js query --graph demo/ts-project/graphify-out/graph.json Cart.total --direction dependencies
-```
-
-### No CI de qualquer repositório (GitHub Action)
-
-O jeito mais simples. Este repositório é também uma GitHub Action
-(`action.yml` na raiz). Em outro repositório:
+Este repositório é também uma GitHub Action. Em qualquer outro repositório:
 
 ```yaml
+name: Testes
+
 on: [pull_request]
 
 jobs:
@@ -148,308 +133,182 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0                       # obrigatório
-      - uses: actions/setup-node@v4            # a Action usa o Node do runner
-        with: { node-version: "20" }
-      - run: npm ci                            # dependências do SEU projeto
+          fetch-depth: 0              # obrigatório: o diff precisa do histórico
+
+      - uses: actions/setup-node@v4   # a Action usa o Node do runner
+        with:
+          node-version: "20"
+
+      - run: npm ci                   # dependências do SEU projeto
+
       - uses: Pedronovaesdev/test-graph@v1
         with:
-          dry-run: true                        # comece só observando
+          dry-run: true               # comece só observando o que seria escolhido
 ```
 
-A Action instala o graphify num venv próprio, compila o seletor, calcula a base
-(base do PR, ou o commit anterior ao push) e roda `select-tests.sh`. O relatório
-vai para o Job Summary.
+A Action instala o graphify num venv próprio, compila o seletor, restaura o cache
+do indexador, calcula a base (base do PR, ou o commit anterior ao push), roda a
+seleção e executa os testes. O relatório aparece no **Job Summary** do run.
+
+> [!TIP]
+> Para Java use `actions/setup-java`; para Python, `actions/setup-python` + `pip install`.
+> A Action não troca a versão da linguagem do seu projeto.
+
+<details>
+<summary><b>Entradas e saídas da Action</b></summary>
+
+<br/>
 
 | Entrada | Padrão | Descrição |
 |---|---|---|
-| `base` | automático | commit de comparação |
-| `head` | `HEAD` | commit analisado |
-| `project` | `.` | pasta do projeto (monorepo) |
-| `lang` | detecta | `typescript`, `vitest`, `java`, `java-gradle`, `python` |
-| `dry-run` | `false` | `true` = só seleciona e explica |
-| `graphify-version` | `0.9.90` | versão do indexador |
-| `cache` | `true` | guarda o cache do graphify entre execuções (só os arquivos alterados são relidos) |
+| `base` | automático | Commit de comparação. Vazio = base do PR (`pull_request`) ou commit anterior ao push |
+| `head` | `HEAD` | Commit analisado |
+| `project` | `.` | Pasta do projeto dentro do repositório (monorepo) |
+| `lang` | detecta | `typescript`, `angular`, `vitest`, `java`, `java-gradle`, `python`, ou o caminho de um `.yml` do projeto |
+| `dry-run` | `false` | `true` = só seleciona e explica, sem rodar os testes |
+| `graphify-version` | `0.9.90` | Versão do indexador AST |
+| `cache` | `true` | Guarda o cache do graphify entre execuções (só os arquivos alterados são relidos) |
 
-Saídas: `mode` (`selective`, `full`, `none` ou `fail-safe`), `selected`, `total`,
-`report` (caminho do `report.json`). O workflow `action-selftest.yml` testa a
-Action neste repositório com `uses: ./`.
-
-**Publicar uma versão da Action:** `git tag v1.0.0 && git tag -f v1 && git push origin v1.0.0 && git push -f origin v1`.
-O `@v1` sempre aponta para a última versão 1.x.
-
-### No CI do seu projeto (pacote npm)
-
-A ferramenta é publicada como pacote npm (`selector/` é o pacote, ~21 kB). O CI do
-seu projeto não precisa deste repositório:
+| Saída | Descrição |
+|---|---|
+| `mode` | `selective`, `full`, `none` ou `fail-safe` |
+| `selected` | Quantos testes foram selecionados |
+| `total` | Quantos testes existem no projeto |
+| `report` | Caminho do `report.json` |
 
 ```yaml
-- uses: actions/checkout@v4
-  with:
-    fetch-depth: 0
-- uses: actions/setup-node@v4
-  with: { node-version: "20" }
-- uses: actions/setup-python@v5
-  with: { python-version: "3.12" }
-- run: pip install graphifyy==0.9.90 && npm install -g test-graph-selector@1
-- run: npm ci   # (ou setup-java / pip install, conforme o projeto)
-- run: select-tests --base "origin/${{ github.base_ref || 'main' }}" --head HEAD
+- id: tgs
+  uses: Pedronovaesdev/test-graph@v1
+- run: echo "Rodou ${{ steps.tgs.outputs.selected }} de ${{ steps.tgs.outputs.total }} (${{ steps.tgs.outputs.mode }})"
 ```
 
-**Publicar uma versão:** crie o secret `NPM_TOKEN` no GitHub (token *Automation*
-do npmjs.com) e rode:
+</details>
+
+<details>
+<summary><b>GitLab CI, Bitbucket e outros</b></summary>
+
+<br/>
+
+O passo é o mesmo em qualquer CI: clone completo, graphify instalado e o script.
+Exemplo ilustrativo (não testado no GitLab):
+
+```yaml
+# .gitlab-ci.yml
+testes:
+  image: node:20
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - apt-get update && apt-get install -y python3-venv
+    - python3 -m venv /tmp/tgs && /tmp/tgs/bin/pip install graphifyy==0.9.90
+    - npm ci
+    - git clone --depth 1 https://github.com/Pedronovaesdev/test-graph.git /tmp/test-graph
+    - GRAPHIFY=/tmp/tgs/bin/graphify /tmp/test-graph/select-tests.sh --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --head HEAD
+```
+
+</details>
+
+## 💻 No seu PC
+
+**Requisitos:** Git, Node.js 18+, Python 3.10+ (para o indexador) e o toolchain do
+projeto testado (Node/Jest, Java 17+ com Maven ou Gradle, ou Python com pytest).
+No Windows, use o Git Bash.
 
 ```bash
-cd selector && npm version 1.0.1 --no-git-tag-version && cd ..
-git commit -am "v1.0.1" && git tag v1.0.1 && git push --follow-tags
+git clone https://github.com/Pedronovaesdev/test-graph.git
+cd test-graph
+pip install -r requirements.txt            # graphifyy==0.9.90 (indexador AST)
+(cd selector && npm ci && npm run build)   # opcional: o script compila sozinho se faltar
+
+# Ver o que seria rodado no seu projeto, sem executar nada
+./select-tests.sh --project ../meu-projeto --base origin/main --dry-run
+
+# Rodar de verdade
+./select-tests.sh --project ../meu-projeto --base origin/main
 ```
 
-Depois, na aba *Actions* → **Release (npm)** → *Run workflow*, escolha a tag. A
-publicação é manual de propósito: as tags também versionam a GitHub Action, e
-criar uma tag não publica nada no npm sozinha. O workflow confere se a tag bate
-com o `package.json`, roda os testes e publica. Para testar o pacote sem publicar:
-`cd selector && npm pack` gera o `.tgz`, e `npm install -g ./test-graph-selector-1.0.0.tgz` o instala.
+Os relatórios ficam em `<projeto>/.selector-out/` (`report.txt`, `report.json`,
+`report.md`, `selected-tests.txt`, `command.txt`, `mode.txt`).
 
-### Na pipeline deste repositório (GitHub Actions)
+<details>
+<summary><b>Todas as opções do <code>select-tests.sh</code></b></summary>
 
-`.github/workflows/selective-tests.yml` tem quatro jobs:
+<br/>
 
-- `tool-tests`: testes Jest do próprio seletor.
-- `full-suite`: suíte completa dos projetos demo (referência), medindo tempo.
-- `selective`: `select-tests.sh` nos mesmos projetos, com a explicação no Job Summary.
-- `compare`: tabela completo × seletivo no Job Summary.
-
-Pontos importantes para reaproveitar em outro repo:
-
-- `actions/checkout` com `fetch-depth: 0` (sem histórico o diff falha).
-- Base do diff: `github.event.pull_request.base.sha` em PR, `github.event.before` em push
-  (com fallback para `HEAD~1` em branch nova).
-- `actions/cache` em `graphify-out/` com chave por SO + versão do graphify e
-  `restore-keys` amplas. O cache é por conteúdo de arquivo; o grafo é sempre
-  regerado para o commit analisado.
-
-Para GitLab CI / Bitbucket o passo é o mesmo: clone completo + `./select-tests.sh
---base "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --head HEAD`.
-
-## Regras de segurança
-
-Princípio: **na dúvida, roda mais**. Cada regra disparada aparece no relatório.
-
-| Regra | Quando | Efeito |
+| Opção | Padrão | Descrição |
 |---|---|---|
-| `global-config` | `.github/workflows/**` (caminho a partir da raiz do repo) | suíte completa |
-| `build-config` | `package.json`, lockfiles, `jest.config.*`, `tsconfig*.json`, `.env*`, `pom.xml`, `build.gradle*`, `src/*/resources/**`... | suíte completa |
-| `source-not-in-graph` | arquivo de código que o indexador não modelou | suíte completa |
-| `unclassified-file` | arquivo fora do grafo e de qualquer regra (asset, dado...) | suíte completa |
-| `no-dependents` | código **modificado** que está no grafo, mas que nenhum outro arquivo usa (indexador perdeu as setas, ou só o framework usa: bean com `@EventListener`/`@Scheduled`) | suíte completa |
-| `no-base-graph` | remoção/renomeação sem grafo do base disponível | suíte completa |
-| `data-file` | `__snapshots__/`, `*.snap`, `fixtures/`, `__fixtures__/`, `__mocks__/` | testes do diretório dono da pasta (e subdiretórios) |
-| `data-file-no-tests` | snapshot/fixture sem nenhum teste nesse diretório | suíte completa |
-| `changed-test` | teste alterado ou adicionado | sempre selecionado |
-| `deleted-test` | teste removido | nada a rodar por ele |
-| `docs-only` | `*.md`, `*.rst`, `docs/**`, `LICENSE`, `.gitignore`... | nenhum teste |
-| `outside-project` | arquivo fora de `--project` | ignorado |
-| `graph-seed` | arquivo presente no grafo | semente da busca reversa |
-| `always-run` | teste que usa um `always_run_markers` (ex.: `@SpringBootTest`), quando algum código de produção muda | selecionado sempre |
+| `--base` | obrigatório | Commit/branch de comparação. O diff é `base...head` (desde o merge-base) |
+| `--head` | `HEAD` | Commit analisado. Se for o checkout atual, indexa no lugar; senão usa um worktree |
+| `--project` | `.` | Diretório do projeto (pode ser um subdiretório do repo, ex.: monorepo) |
+| `--lang` | autodetecta | `package.json` + `vitest.config.*` → `vitest`; `package.json` → `typescript`; `pom.xml` → `java`; `build.gradle(.kts)` → `java-gradle`; `pyproject.toml`/`setup.py`/`pytest.ini` → `python`. Angular: `--lang angular` |
+| `--dry-run` | — | Só seleciona e explica; não executa testes |
+| `--format` | `text` | Formato impresso no stdout (`text`, `json`, `md`). Os três ficam em `--out-dir` |
+| `--out-dir` | `<projeto>/.selector-out` | Pasta dos relatórios |
 
-Snapshots e fixtures: a escolha foi rodar **os testes do diretório que contém a
-pasta de dados** (ex.: `tests/ui/__snapshots__/x.snap` → todos os testes em
-`tests/ui/`). É mais barato que a suíte completa e cobre a convenção do Jest
-(snapshot ao lado do teste). Se não houver teste ali, cai para a suíte completa.
+**Variáveis de ambiente:** `GRAPHIFY` (executável do indexador), `NODE`,
+`FULL_SUITE_COMMAND` (sobrescreve o comando da suíte completa), `GRAPHIFY_FAST=0`
+(desliga o wrapper otimizado do graphify).
 
-Seleção vazia (ex.: só documentação) é **sucesso**, com a mensagem "nenhum teste
-afetado". O comando Jest gerado inclui `--passWithNoTests` por segurança.
+**Códigos de saída:**
 
-## Demonstração
+| Código | Significado |
+|---|---|
+| `0` | Testes passaram, ou nada a rodar, ou `--dry-run` |
+| `1` | Testes falharam |
+| `2` | Erro da ferramenta sem como testar (argumento inválido, sem git, fail-safe em `--dry-run`) |
+
+</details>
+
+<details>
+<summary><b>Consultar o grafo direto</b></summary>
+
+<br/>
 
 ```bash
-bash demo/compare.sh typescript     # ou java, java-gradle, python, spring
-bash demo/prove-safety.sh typescript
+# Quem depende de add(), transitivamente, com a cadeia
+node selector/dist/cli.js query --graph demo/ts-project/graphify-out/graph.json add --transitive
+
+# De quem Cart.total() depende
+node selector/dist/cli.js query --graph demo/ts-project/graphify-out/graph.json Cart.total --direction dependencies
 ```
 
-`compare.sh` cria um repositório descartável em `demo/.work/<lang>` a partir do
-projeto demo, faz um commit por cenário e, para cada um, mede a suíte completa e
-o `select-tests.sh` contra o commit anterior.
+</details>
 
-O projeto TS (`demo/ts-project`) tem barrel `src/index.ts` com `export *`, alias
-`@/` (tsconfig + `moduleNameMapper`), um teste com `jest.mock` + `require()` e a
-cadeia indireta `add() → Cart.total() → cart.ts → cart.test.ts`. Resultado
-esperado (e verificado):
+> [!NOTE]
+> **Pacote npm:** o `selector/` já está pronto para ser publicado como `test-graph-selector`
+> (binários `select-tests` e `test-graph-selector`), mas ainda não está no registro.
+> Para instalar localmente: `cd selector && npm pack && npm install -g ./test-graph-selector-1.0.0.tgz`.
 
-| Mudança | Testes selecionados |
-|---|---|
-| `add()` em `src/utils/math.ts` | `math`, `cart`, `barrel` |
-| `money()` em `src/utils/money.ts` | `alias`, `cart` |
-| `User` em `src/services/user.ts` | `user`, `mock`, `barrel` (o `barrel` é sobresseleção, ver limites) |
-| só `README.md` | nenhum |
-| renomear `notifier.ts` (+ import no teste) | `mock` (via grafo do base + teste alterado) |
-| `package.json` | suíte completa |
+## 🧩 Linguagens suportadas
 
-Resultado medido localmente (Windows 11, Node 24, Java 24, Python 3.11):
+| `--lang` | Stack | Runner | Validado em |
+|---|---|---|---|
+| `typescript` | TypeScript / JavaScript | Jest | demo + monorepo de empresa |
+| `vitest` | TypeScript / JavaScript (Next.js, Vite) | Vitest | demo |
+| `angular` | Angular (`jest-preset-angular`) | Jest | Bitwarden clients |
+| `java` | Java | JUnit 5 + Maven | demo + jsoup + Commons Math |
+| `java-gradle` | Java / Spring Boot | JUnit 5 + Gradle | demos + backend de empresa |
+| `python` | Python | pytest | demo |
 
-#### Suite completa vs seletiva (typescript)
+Cada configuração vive em [`selector/languages/`](selector/languages/). Um projeto
+pode ter o próprio `.github/test-selector.yml` herdando de uma delas:
 
-| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
-|---|---|---|---|---|---|
-| muda add() | selective | 3 / 6 | 19.9s | 19.0s | graph-seed |
-| muda money() | selective | 2 / 6 | 16.8s | 17.8s | graph-seed |
-| muda User | selective | 3 / 6 | 17.4s | 19.3s | graph-seed |
-| so documentacao | none | 0 / 6 | 14.7s | 6.1s | docs-only |
-| renomeia notifier.ts | selective | 1 / 6 | 17.0s | 19.7s | changed-test, graph-seed |
-| muda package.json | full | 6 / 6 | 15.0s | 22.5s | build-config |
+```yaml
+extends: typescript
+test_patterns:
+  - "**/*.feature"
+companion_tests:
+  - { source: ".steps.tsx", test: ".feature" }   # Cucumber: X.steps.tsx representa X.feature
+command: "npx cypress run --spec {files_comma}"
+```
 
-Total: completo 101s, seletivo 104s (o seletivo inclui indexacao AST + selecao).
+<details>
+<summary><b>Adicionar uma linguagem nova</b></summary>
 
-#### Suite completa vs seletiva (java)
+<br/>
 
-| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
-|---|---|---|---|---|---|
-| muda MathUtils.add() | selective | 4 / 5 | 18.8s | 20.9s | graph-seed |
-| muda Money.format() | selective | 3 / 5 | 14.2s | 19.3s | graph-seed |
-| muda EmailNotifier (DI) | selective | 1 / 5 | 14.1s | 20.1s | graph-seed |
-| so documentacao | none | 0 / 5 | 11.3s | 6.2s | docs-only |
-| muda pom.xml | full | 5 / 5 | 11.9s | 18.1s | build-config |
-
-Total: completo 70s, seletivo 84s (o seletivo inclui indexacao AST + selecao).
-
-**Sobre o tempo:** nestes demos, de propósito pequenos (5 a 6 arquivos de teste), o
-seletivo **não** fica mais rápido. O custo fixo de subir Jest/ts-jest ou Maven e de
-indexar com o graphify (~5–7s) domina quando a suíte inteira leva ~15–25s. O ganho
-vem da fração de testes evitada (aqui 17%–100% por commit), e só vira tempo de
-pipeline quando a suíte é maior que esse custo fixo. Os demos servem para provar a
-**correção** da seleção, não a economia de tempo.
-
-**Prova de segurança** (`prove-safety.sh`): injeta `return a - b` em `add()`,
-commita e roda `select-tests.sh`. Os testes selecionados falham (`cart.test.ts`
-inclusive, pela cadeia indireta) e o script sai com `1`: o bug não passa.
-
-O projeto Java (`demo/java-project`) valida a adaptação: chamada estática por
-import com `*` (`com.example.shop.util.*`), classe do mesmo pacote sem import,
-herança (`DiscountCart extends Cart`), interface + injeção por construtor
-(`Checkout(Notifier)` recebendo `EmailNotifier`). O `demo/java-gradle-project` tem
-exatamente as mesmas classes, mas com Gradle: a seleção sai igual e só o comando
-muda (`./gradlew test --tests CartTest --tests MoneyTest`).
-
-#### Suite completa vs seletiva (java-gradle)
-
-| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
-|---|---|---|---|---|---|
-| muda MathUtils.add() | selective | 4 / 5 | 7.7s | 14.0s | graph-seed |
-| muda Money.format() | selective | 3 / 5 | 6.8s | 13.4s | graph-seed |
-| muda EmailNotifier (DI) | selective | 1 / 5 | 8.9s | 14.5s | graph-seed |
-| so documentacao | none | 0 / 5 | 6.9s | 6.1s | docs-only |
-| muda build.gradle | full | 5 / 5 | 6.9s | 13.1s | build-config |
-
-Total: completo 37s, seletivo 61s (o seletivo inclui indexacao AST + selecao).
-
-O projeto Python (`demo/python-project`) cobre os casos difíceis do Python:
-`app/__init__.py` reexportando (barrel), import absoluto e relativo
-(`from ..utils.money import money`), herança (`Admin(User)`), `mock.patch` com o
-alvo em texto e, o mais importante, **fixture do pytest**: `test_cart.py` recebe
-`cart` do `tests/cart/conftest.py` por injeção, sem importar nada. Não existe nenhuma seta
-de `test_cart.py` para o código. Por isso o `python.yml` declara
-`scope_files: ["**/conftest.py"]`: quando a busca alcança um `conftest.py`, todos
-os testes da pasta dele (`tests/cart/`) entram, com a explicação
-`tests/cart/test_cart.py --usa fixtures de--> tests/cart/conftest.py --importa--> app/services/cart.py`.
-
-#### Suite completa vs seletiva (python)
-
-| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
-|---|---|---|---|---|---|
-| muda add() | selective | 3 / 6 | 3.5s | 15.1s | graph-seed |
-| muda money() | selective | 2 / 6 | 3.5s | 14.9s | graph-seed |
-| muda Cart (fixture do conftest) | selective | 1 / 6 | 3.0s | 12.2s | graph-seed |
-| muda User | selective | 3 / 6 | 3.1s | 8.4s | graph-seed |
-| so documentacao | none | 0 / 6 | 2.8s | 5.1s | docs-only |
-| muda pyproject.toml | full | 6 / 6 | 2.8s | 8.3s | build-config |
-
-Total: completo 19s, seletivo 64s (o seletivo inclui indexacao AST + selecao).
-
-Na prova de segurança do Python, o bug em `add()` foi pego por
-`tests/cart/test_cart.py`, que **só** é alcançado pela fixture do `conftest.py`.
-Sem a regra `scope_files`, esse teste não seria selecionado.
-
-### Spring Boot
-
-O `demo/spring-project` (Spring Boot 3.5 + Gradle, `--lang java-gradle`) cobre:
-injeção por construtor, `@Autowired` em campo, interface com `@Service` que a
-implementa, `@WebMvcTest(CartController.class)` com `@MockitoBean`, e um
-`@SpringBootTest` que chama a API **pela URL** (`mvc.perform(get("/cart/total"))`)
-sem citar nenhuma classe do app.
-
-Esse último não tem nenhuma seta no AST até o controller. Por isso o
-`java.yml`/`java-gradle.yml` declara `always_run_markers: [SpringBootTest]`: testes
-com essa anotação rodam sempre que algum código de produção muda. Eles sobem a
-aplicação inteira, então de fato dependem de tudo. `@WebMvcTest(X.class)` e
-`@MockitoBean X` não precisam disso, porque citam a classe.
-
-#### Suite completa vs seletiva (spring)
-
-| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
-|---|---|---|---|---|---|
-| muda DefaultPriceService (impl. da interface) | selective | 4 / 5 | 23.7s | 26.0s | always-run, graph-seed |
-| muda Clock (@Autowired em campo) | full | 5 / 5 | 19.1s | 27.3s | no-dependents |
-| muda CartController | selective | 3 / 5 | 17.1s | 22.9s | always-run, graph-seed |
-| muda so um teste | selective | 1 / 5 | 18.2s | 13.9s | changed-test |
-| so documentacao | none | 0 / 5 | 16.6s | 5.4s | docs-only |
-| muda application.properties | full | 5 / 5 | 15.0s | 21.2s | build-config |
-
-Total: completo 109s, seletivo 116s (o seletivo inclui indexacao AST + selecao).
-
-Na prova de segurança do Spring, o bug em `DefaultPriceService` foi pego pelo teste
-unitário **e** pelo `ApiIntegrationTest` (selecionado pela regra `always-run`).
-O cenário `muda Clock` caiu na suíte completa pela regra `no-dependents`: o
-graphify não resolve a classe `Clock` (ver limites), e sem essa regra o resultado
-seria "nenhum teste afetado".
-
-## Limites conhecidos
-
-- **Granularidade por arquivo.** O graphify registra só a linha **inicial** de cada
-  símbolo (`source_location: "L5"`), sem linha final, então não dá para mapear um
-  trecho do diff para a função alterada: todo símbolo de um arquivo alterado vira
-  semente. Melhoria futura: adicionar `end_line` no extrator e cruzar com os hunks
-  do diff.
-- **Sobresseleção por barrels/reexports.** Quem importa `src/index.ts` depende de
-  tudo que ele reexporta. Mudar `User` seleciona `barrel.test.ts` mesmo que o
-  teste só use `add()`.
-- **Imports dinâmicos montados em runtime** (`import(\`./plugins/${name}\`)`,
-  `require(variavel)`) não aparecem no AST. Mitigação: manter esses módulos sob uma
-  regra `full_suite_patterns` ou `data_patterns`.
-- **Classes com nome igual ao de uma classe do JDK** (verificado com `Clock`, que
-  colide com `java.time.Clock`) não têm as referências resolvidas pelo graphify: o
-  campo `@Autowired private Clock clock` não gera seta. A regra `no-dependents`
-  pega esse caso (código modificado sem nenhum dependente → suíte completa), mas
-  só quando **ninguém** mais aponta para o arquivo.
-- **`@SpringBootTest` é sobresseleção proposital**: roda com qualquer mudança de
-  código, inclusive os que sobem só uma fatia (`classes = {...}`).
-- **DI/reflexão em Java.** Interfaces são tratadas de forma conservadora
-  (`polymorphic_relations` em `java.yml`: mudar uma implementação alcança quem usa
-  a interface, e também as outras implementações, o que é sobresseleção). Bean
-  resolvido por nome, `Class.forName`, configuração XML do Spring ou proxies não
-  são visíveis no AST.
-- **Config, assets e variáveis de ambiente** não aparecem como dependência no AST;
-  por isso caem nas regras de suíte completa (`build-config`, `unclassified-file`).
-- **Import com `*` em Java** vira um nó externo (`util`) no grafo; as chamadas
-  ainda são resolvidas (`Cart.total() → MathUtils.add()`), mas um arquivo que use
-  um tipo do pacote sem chamá-lo pode não ganhar aresta.
-- **Fixtures do pytest** são injetadas por nome, sem import. A regra `scope_files`
-  (conftest.py) cobre o caso comum, mas é sobresseleção: entra todo teste da pasta,
-  use ele a fixture ou não. Fixtures vindas de plugins (`pytest_plugins`,
-  entry points) não são vistas.
-- **`mock.patch("pacote.modulo.Classe")`** usa o alvo como texto: o AST não liga o
-  teste ao módulo pelo patch. Em geral o teste também importa o módulo e a seta
-  existe por esse import; se não importar, o teste não é selecionado.
-- **Testes como arquivo.** `describe/it/test()` não viram nós no graphify; o teste
-  é reconhecido pelo caminho (`test_patterns`) e selecionado por arquivo inteiro
-  (Jest) ou por classe (JUnit).
-- **Head = checkout atual** é indexado no lugar, então mudanças não commitadas no
-  working tree entram no grafo do head (mas não no diff). Na pipeline o checkout
-  é limpo.
-
-## Adaptar para outra linguagem
-
-O grafo já vem no mesmo formato para as 30+ linguagens que o graphify suporta (Go,
-Python, Kotlin, C#...). Basta criar `selector/languages/<lang>.yml`:
+O grafo já vem no mesmo formato para as 30+ linguagens que o graphify suporta. Basta criar
+`selector/languages/<lang>.yml` (exemplo ilustrativo, Go não foi testado):
 
 ```yaml
 name: go
@@ -461,30 +320,31 @@ command: "go test {each_file:./%s}"
 full_command: "go test ./..."
 ```
 
-e rodar `./select-tests.sh --lang go ...`. Nenhum código muda. (Exemplo
-ilustrativo: Go não foi testado.)
-
-Campos do YAML:
-
 | Campo | Para que serve |
 |---|---|
-| `source_patterns` | O que é código. Código fora do grafo → suíte completa. |
-| `test_patterns` | O que é arquivo de teste. |
-| `full_suite_patterns` | Mudou isso → suíte completa (build, lockfile, config). |
-| `data_patterns` | Snapshot/fixture/conftest → testes da mesma pasta. |
-| `scope_files` | Arquivo que vale para a pasta inteira sem import (ex.: `conftest.py`). Se a busca o alcança, todos os testes da pasta entram. |
-| `polymorphic_relations` | Relações seguidas também no sentido direto (interface/herança). |
-| `always_run_markers` | Anotações/símbolos que marcam testes de aplicação inteira (ex.: `SpringBootTest`): rodam com qualquer mudança de código de produção. |
-| `ignore_patterns` | Opcional. Padrão: documentação (`*.md`, `docs/**`...). |
-| `command` / `full_command` | Comandos de teste. Marcadores: `{files}` (caminhos separados por espaço), `{classes}` (nomes de classe separados por vírgula), `{each_file:TPL}` / `{each_class:TPL}` (repete `TPL` trocando `%s`, ex.: Gradle `{each_class:--tests %s}`). |
+| `source_patterns` | O que é código. Código fora do grafo → suíte completa |
+| `test_patterns` | O que é arquivo de teste (espelha o `testMatch` do runner) |
+| `full_suite_patterns` | Mudou isso → suíte completa (build, lockfile, config) |
+| `data_patterns` | Snapshot/fixture → testes da mesma pasta |
+| `ignore_patterns` | Opcional. Padrão: documentação (`*.md`, `docs/**`…) |
+| `scope_files` | Arquivo que vale para a pasta inteira sem import (ex.: `conftest.py`) |
+| `companion_tests` | Código que representa um teste não-código (`X.steps.tsx` → `X.feature`) |
+| `owner_files` | Arquivo que pertence a um código (`x.component.html` → `x.component.ts`) |
+| `polymorphic_relations` | Relações seguidas também no sentido direto (interface/herança) |
+| `always_run_markers` | Testes de aplicação inteira (ex.: `SpringBootTest`): rodam com qualquer mudança de código |
+| `cwd` | Pasta onde o comando roda (monorepos) |
+| `command` / `full_command` | Comandos. Marcadores: `{files}`, `{files_comma}`, `{classes}`, `{each_file:TPL}`, `{each_class:TPL}` |
+| `extends` | Herda de outra configuração e sobrescreve só o que declarar |
 
-Os quatro YAMLs reais estão em [selector/languages/](selector/languages/).
+</details>
 
-### Trocar o indexador
+<details>
+<summary><b>Trocar o indexador</b></summary>
 
-O seletor depende **só do formato do `graph.json`**, não do graphify. Qualquer
-indexador (CocoIndex, um parser próprio com `ts-morph` ou JavaParser...) serve se
-gravar:
+<br/>
+
+O seletor depende **só do formato do `graph.json`**, não do graphify. Qualquer indexador
+(um parser próprio com `ts-morph` ou JavaParser, por exemplo) serve se gravar:
 
 ```json
 {
@@ -494,46 +354,280 @@ gravar:
 }
 ```
 
-com `source` dependendo de `target`, `source_file` relativo ao projeto, um nó por
-arquivo (label = nome do arquivo) e `contains`/`method` ligando arquivo → símbolo
-e classe → método. A chave de arestas pode ser `edges` ou `links`. Para trocar,
-altere só a função `build_graph` em `select-tests.sh`.
+com `source` dependendo de `target`, `source_file` relativo ao projeto, um nó por arquivo
+(label = nome do arquivo) e `contains`/`method` ligando arquivo → símbolo e classe → método.
+A chave de arestas pode ser `edges` ou `links`. Para trocar, altere só a função
+`build_graph` em `selector/bin/select-tests.sh`.
 
-## Estrutura
+</details>
 
-```text
-select-tests.sh                 atalho para selector/bin/select-tests.sh
-selector/                       pacote npm `test-graph-selector` (TypeScript + Jest)
-  bin/select-tests.sh           CLI de pipeline (Shell): o comando `select-tests`
-  src/diff.ts                   leitor de diff do Git
-  src/graph.ts                  grafo + BFS reversa / consulta direta
-  src/rules.ts                  regras de segurança
-  src/engine.ts                 motor de seleção (head + base)
-  src/report.ts                 explicação: texto, JSON, Markdown
-  src/cli.ts                    subcomandos: select, needs-base, query, full-command
-  languages/{typescript,java,java-gradle,python}.yml
-  tests/                        testes unitários (grafos montados à mão)
-demo/
-  ts-project/                   demo principal (TypeScript + Jest)
-  java-project/                 adaptação (Java + JUnit 5 + Maven)
-  java-gradle-project/          mesmas classes, com Gradle (wrapper incluído)
-  python-project/               adaptação (Python + pytest)
-  spring-project/               Spring Boot 3.5 + Gradle
-  compare.sh                    completo × seletivo em N commits
-  prove-safety.sh               bug injetado é pego por um teste selecionado
-.github/workflows/selective-tests.yml
-.github/workflows/release.yml   publica no npm (disparo manual)
-.github/workflows/action-selftest.yml  testa a GitHub Action com uses: ./
-action.yml                      a GitHub Action (uses: Pedronovaesdev/test-graph@v1)
-requirements.txt                indexador AST (graphifyy==0.9.90)
+## 🛡️ Regras de segurança
+
+Princípio: **na dúvida, roda mais.** Cada regra disparada aparece no relatório.
+
+| Mudou… | Efeito |
+|---|---|
+| `.github/workflows/**`, `package.json`, lockfile, `tsconfig`, `pom.xml`, `build.gradle`… | 🔴 suíte completa |
+| Código que o indexador não modelou, ou modificado sem nenhum dependente | 🔴 suíte completa |
+| Snapshot / fixture | 🟡 testes da pasta dona |
+| Teste | 🟢 sempre selecionado |
+| Código presente no grafo | 🟢 testes alcançados pela busca reversa |
+| Só documentação | ⚪ nenhum teste |
+
+<details>
+<summary><b>Tabela completa de regras</b></summary>
+
+<br/>
+
+| Regra | Quando | Efeito |
+|---|---|---|
+| `global-config` | `.github/workflows/**` (caminho a partir da raiz do repo) | suíte completa |
+| `build-config` | `package.json`, lockfiles, `jest.config.*`, `tsconfig*.json`, `.env*`, `pom.xml`, `build.gradle*`, `src/*/resources/**`… | suíte completa |
+| `source-not-in-graph` | arquivo de código que o indexador não modelou | suíte completa |
+| `unclassified-file` | arquivo fora do grafo e de qualquer regra (asset, dado…) | suíte completa |
+| `no-dependents` | código **modificado** que está no grafo, mas que nenhum outro arquivo usa (o indexador perdeu as setas, ou só o framework usa: `@EventListener`, `@Scheduled`) | suíte completa |
+| `no-base-graph` | remoção/renomeação sem grafo do base disponível | suíte completa |
+| `data-file` | `__snapshots__/`, `*.snap`, `fixtures/`, `__fixtures__/`, `__mocks__/` | testes do diretório dono da pasta (e subdiretórios) |
+| `data-file-no-tests` | snapshot/fixture sem nenhum teste nesse diretório | suíte completa |
+| `owned-file` | template/estilo de um componente (`x.component.html`) | semente no código dono (`x.component.ts`) |
+| `changed-test` | teste alterado ou adicionado | sempre selecionado |
+| `deleted-test` | teste removido | nada a rodar por ele |
+| `docs-only` | `*.md`, `*.rst`, `docs/**`, `LICENSE`, `.gitignore`… | nenhum teste |
+| `outside-project` | arquivo fora de `--project` | ignorado |
+| `graph-seed` | arquivo presente no grafo | semente da busca reversa |
+| `always-run` | teste com um `always_run_markers` (ex.: `@SpringBootTest`), quando algum código de produção muda | selecionado sempre |
+
+Seleção vazia (ex.: só documentação) é **sucesso**, com a mensagem "nenhum teste afetado".
+
+</details>
+
+## 📊 Resultados em projetos reais
+
+| Projeto | Stack | Suíte completa | Testes evitados | Ganho |
+|---|---|---|---|---|
+| [Bitwarden clients](https://github.com/bitwarden/clients) | Angular + Jest | ~15,5 min por PR | 43% | **−38% de espera por PR, −33% em minutos de CI** (medido no GitHub Actions) |
+| Monorepo de empresa | React + Cypress/Cucumber, NestJS | ~30 min | 45% dos cenários | ~−40% (projeção) |
+| Backend de empresa | Spring Boot + Gradle + Testcontainers | 6,5 min | 45% num PR real | depende do PR |
+| [jsoup](https://github.com/jhy/jsoup) / [Commons Math](https://github.com/apache/commons-math) | Java + Maven | 45–84 s | 9–93% | nenhum: o custo fixo empata |
+
+> [!IMPORTANT]
+> **Quando compensa:** ganho = tempo da suíte × fração evitada − custo fixo da ferramenta (~15 s a 2 min).
+> Suítes de dezenas de minutos com código modular (Cypress, Playwright, integração com banco/Docker,
+> monorepos) ganham muito. Suítes de segundos não ganham nada.
+
+Metodologia, números por commit e lições de cada avaliação: [`docs/RESULTADOS.md`](docs/RESULTADOS.md).
+
+## 🧪 Demonstração
+
+Cada stack tem um projeto demo com os casos difíceis da linguagem (barrels, aliases,
+herança, injeção por interface, fixtures do pytest, `@SpringBootTest` chamando a API por URL):
+
+```bash
+bash demo/compare.sh typescript       # completa × seletiva, commit a commit (ou java, java-gradle, python, spring)
+bash demo/prove-safety.sh typescript  # injeta um bug em add() e prova que um teste selecionado o pega
 ```
 
-A implementação anterior (motor Java/JGraphT) foi removida do repositório; ela
-continua disponível na tag `legacy-java`.
+`compare.sh` cria um repositório descartável em `demo/.work/<lang>`, faz um commit por
+cenário e mede a suíte completa e o `select-tests.sh` contra o commit anterior.
+`prove-safety.sh` troca `a + b` por `a - b` e espera que o script saia com `1`.
+**5 de 5 bugs injetados foram pegos**, inclusive pelas cadeias indiretas.
 
-## Créditos
+<details>
+<summary><b>TypeScript (<code>demo/ts-project</code>)</b></summary>
 
-- [graphify](https://github.com/Graphify-Labs/graphify) (Apache-2.0), usado sem
-  modificação, apenas como indexador AST (tree-sitter). Nenhum código dele foi
-  copiado.
+<br/>
+
+Barrel `src/index.ts` com `export *`, alias `@/` (tsconfig + `moduleNameMapper`), um teste
+com `jest.mock` + `require()` e a cadeia indireta `add() → Cart.total() → cart.ts → cart.test.ts`.
+
+| Mudança | Testes selecionados |
+|---|---|
+| `add()` em `src/utils/math.ts` | `math`, `cart`, `barrel` |
+| `money()` em `src/utils/money.ts` | `alias`, `cart` |
+| `User` em `src/services/user.ts` | `user`, `mock`, `barrel` (o `barrel` é sobresseleção) |
+| só `README.md` | nenhum |
+| renomear `notifier.ts` (+ import no teste) | `mock` (via grafo do base + teste alterado) |
+| `package.json` | suíte completa |
+
+Medido localmente (Windows 11, Node 24):
+
+| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
+|---|---|---|---|---|---|
+| muda add() | selective | 3 / 6 | 19.9s | 19.0s | graph-seed |
+| muda money() | selective | 2 / 6 | 16.8s | 17.8s | graph-seed |
+| muda User | selective | 3 / 6 | 17.4s | 19.3s | graph-seed |
+| so documentacao | none | 0 / 6 | 14.7s | 6.1s | docs-only |
+| renomeia notifier.ts | selective | 1 / 6 | 17.0s | 19.7s | changed-test, graph-seed |
+| muda package.json | full | 6 / 6 | 15.0s | 22.5s | build-config |
+
+</details>
+
+<details>
+<summary><b>Java + Maven (<code>demo/java-project</code>) e Gradle (<code>demo/java-gradle-project</code>)</b></summary>
+
+<br/>
+
+Chamada estática por import com `*`, classe do mesmo pacote sem import, herança
+(`DiscountCart extends Cart`), interface + injeção por construtor (`Checkout(Notifier)`
+recebendo `EmailNotifier`). O projeto Gradle tem as mesmas classes: a seleção sai igual e
+só o comando muda (`./gradlew test --tests CartTest --tests MoneyTest`).
+
+**Maven:**
+
+| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
+|---|---|---|---|---|---|
+| muda MathUtils.add() | selective | 4 / 5 | 18.8s | 20.9s | graph-seed |
+| muda Money.format() | selective | 3 / 5 | 14.2s | 19.3s | graph-seed |
+| muda EmailNotifier (DI) | selective | 1 / 5 | 14.1s | 20.1s | graph-seed |
+| so documentacao | none | 0 / 5 | 11.3s | 6.2s | docs-only |
+| muda pom.xml | full | 5 / 5 | 11.9s | 18.1s | build-config |
+
+**Gradle:**
+
+| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
+|---|---|---|---|---|---|
+| muda MathUtils.add() | selective | 4 / 5 | 7.7s | 14.0s | graph-seed |
+| muda Money.format() | selective | 3 / 5 | 6.8s | 13.4s | graph-seed |
+| muda EmailNotifier (DI) | selective | 1 / 5 | 8.9s | 14.5s | graph-seed |
+| so documentacao | none | 0 / 5 | 6.9s | 6.1s | docs-only |
+| muda build.gradle | full | 5 / 5 | 6.9s | 13.1s | build-config |
+
+</details>
+
+<details>
+<summary><b>Python (<code>demo/python-project</code>)</b></summary>
+
+<br/>
+
+`app/__init__.py` reexportando (barrel), import absoluto e relativo, herança (`Admin(User)`),
+`mock.patch` com o alvo em texto e **fixture do pytest**: `test_cart.py` recebe `cart` do
+`tests/cart/conftest.py` por injeção, sem importar nada. Por isso o `python.yml` declara
+`scope_files: ["**/conftest.py"]`: quando a busca alcança um `conftest.py`, todos os testes
+da pasta dele entram.
+
+| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
+|---|---|---|---|---|---|
+| muda add() | selective | 3 / 6 | 3.5s | 15.1s | graph-seed |
+| muda money() | selective | 2 / 6 | 3.5s | 14.9s | graph-seed |
+| muda Cart (fixture do conftest) | selective | 1 / 6 | 3.0s | 12.2s | graph-seed |
+| muda User | selective | 3 / 6 | 3.1s | 8.4s | graph-seed |
+| so documentacao | none | 0 / 6 | 2.8s | 5.1s | docs-only |
+| muda pyproject.toml | full | 6 / 6 | 2.8s | 8.3s | build-config |
+
+Na prova de segurança, o bug em `add()` foi pego por `tests/cart/test_cart.py`, que **só** é
+alcançado pela fixture do `conftest.py`.
+
+</details>
+
+<details>
+<summary><b>Spring Boot (<code>demo/spring-project</code>)</b></summary>
+
+<br/>
+
+Injeção por construtor, `@Autowired` em campo, interface com `@Service`,
+`@WebMvcTest(CartController.class)` com `@MockitoBean` e um `@SpringBootTest` que chama a
+API **pela URL** (`mvc.perform(get("/cart/total"))`) sem citar nenhuma classe do app. Esse
+último não tem nenhuma seta no AST até o controller, por isso `always_run_markers:
+[SpringBootTest]` o faz rodar sempre que algum código de produção muda.
+
+| Commit | Modo | Testes (seletivo / total) | Tempo completo | Tempo seletivo | Regras |
+|---|---|---|---|---|---|
+| muda DefaultPriceService (impl. da interface) | selective | 4 / 5 | 23.7s | 26.0s | always-run, graph-seed |
+| muda Clock (@Autowired em campo) | full | 5 / 5 | 19.1s | 27.3s | no-dependents |
+| muda CartController | selective | 3 / 5 | 17.1s | 22.9s | always-run, graph-seed |
+| muda so um teste | selective | 1 / 5 | 18.2s | 13.9s | changed-test |
+| so documentacao | none | 0 / 5 | 16.6s | 5.4s | docs-only |
+| muda application.properties | full | 5 / 5 | 15.0s | 21.2s | build-config |
+
+O cenário `muda Clock` caiu na suíte completa pela regra `no-dependents`: o graphify não
+resolve a classe `Clock` (colide com `java.time.Clock`), e sem essa regra o resultado seria
+"nenhum teste afetado".
+
+</details>
+
+> [!NOTE]
+> Os demos são pequenos de propósito (5 a 6 arquivos de teste): servem para provar a
+> **correção** da seleção, não a economia de tempo. O custo fixo (subir o runner e indexar)
+> domina quando a suíte inteira leva segundos. Para economia, veja os
+> [resultados em projetos reais](#-resultados-em-projetos-reais).
+
+## ⚠️ Limites conhecidos
+
+<details>
+<summary><b>O que a análise estática não enxerga, e como cada caso é tratado</b></summary>
+
+<br/>
+
+- **Granularidade por arquivo.** O graphify registra só a linha **inicial** de cada símbolo, sem linha final, então todo símbolo de um arquivo alterado vira semente. Melhoria futura: `end_line` no extrator cruzado com os hunks do diff.
+- **Sobresseleção por barrels/reexports.** Quem importa `src/index.ts` depende de tudo que ele reexporta.
+- **Imports dinâmicos montados em runtime** (`import(\`./plugins/${name}\`)`, `require(variavel)`) não aparecem no AST. Mitigação: `full_suite_patterns` ou `data_patterns`.
+- **Classes com nome igual ao de uma classe do JDK** (ex.: `Clock`) não têm as referências resolvidas pelo graphify. A regra `no-dependents` pega o caso quando **ninguém** mais aponta para o arquivo.
+- **`@SpringBootTest` é sobresseleção proposital:** roda com qualquer mudança de código.
+- **DI/reflexão em Java.** Interfaces são tratadas de forma conservadora (mudar uma implementação alcança quem usa a interface). Bean por nome, `Class.forName`, XML do Spring e proxies não são visíveis.
+- **Config, assets e variáveis de ambiente** não aparecem no AST e caem em `build-config` ou `unclassified-file`.
+- **Import com `*` em Java** vira um nó externo; as chamadas ainda são resolvidas, mas um tipo usado sem chamada pode não ganhar aresta.
+- **Fixtures do pytest** de plugins (`pytest_plugins`, entry points) não são vistas; as do `conftest.py` são cobertas por `scope_files` (com sobresseleção).
+- **`mock.patch("pacote.modulo.Classe")`** usa o alvo como texto. Em geral o teste também importa o módulo e a seta existe por esse import.
+- **Testes como arquivo.** `describe/it/test()` não viram nós; a seleção é por arquivo (Jest, Vitest, pytest) ou por classe (JUnit).
+- **Working tree sujo:** o head atual é indexado no lugar, então mudanças não commitadas entram no grafo (mas não no diff). Na pipeline o checkout é limpo.
+
+</details>
+
+## 🗂️ Estrutura
+
+```text
+├── action.yml                    GitHub Action (uses: Pedronovaesdev/test-graph@v1)
+├── select-tests.sh               atalho para selector/bin/select-tests.sh
+├── requirements.txt              indexador AST (graphifyy==0.9.90)
+├── selector/                     o pacote (TypeScript + Jest)
+│   ├── bin/select-tests.sh       orquestrador: diff → grafo → seleção → execução
+│   ├── bin/graphify-fast.py      wrapper do graphify (≈3x mais rápido, corrige extends do tsconfig)
+│   ├── src/                      cli · diff · languages · graph · rules · engine · report
+│   ├── languages/                typescript · vitest · angular · java · java-gradle · python
+│   └── tests/                    testes da ferramenta (grafos montados à mão)
+├── demo/                         ts · java · java-gradle · python · spring + compare.sh e prove-safety.sh
+├── docs/                         ARQUITETURA.md · RESULTADOS.md
+└── .github/workflows/            selective-tests · action-selftest · release
+```
+
+## 📚 Documentação
+
+| Documento | Conteúdo |
+|---|---|
+| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Cada pasta, cada arquivo, o formato do grafo, o CI, o pacote npm, garantias e glossário |
+| [`docs/RESULTADOS.md`](docs/RESULTADOS.md) | Avaliações em projetos reais e open source, com metodologia |
+| [`selector/README.md`](selector/README.md) | README do pacote npm |
+
+<details>
+<summary><b>Publicar uma versão (mantenedores)</b></summary>
+
+<br/>
+
+**GitHub Action:** o `@v1` aponta sempre para a última versão 1.x.
+
+```bash
+git tag v1.0.1 && git tag -f v1
+git push origin v1.0.1 && git push -f origin v1
+```
+
+**npm:** crie o secret `NPM_TOKEN` (token *Automation* do npmjs.com), suba a versão e rode
+o workflow **Release (npm)** a partir da tag, na aba *Actions*. A publicação é manual de
+propósito: as tags também versionam a Action, e criar uma tag não deve publicar nada sozinha.
+
+```bash
+cd selector && npm version 1.0.1 --no-git-tag-version && cd ..
+git commit -am "v1.0.1" && git tag v1.0.1 && git push --follow-tags
+```
+
+A implementação anterior (motor Java) foi removida do repositório e continua na tag `legacy-java`.
+
+</details>
+
+## 🙏 Créditos
+
+- [graphify](https://github.com/Graphify-Labs/graphify) (Apache-2.0), usado sem modificação, apenas como indexador AST (tree-sitter). Nenhum código dele foi copiado.
 - Diff, busca, regras, seleção, relatório, shell e CI são deste repositório.
+
+<div align="center">
+<sub>Feito com ☕ por <a href="https://github.com/Pedronovaesdev">@Pedronovaesdev</a> · Apache-2.0</sub>
+</div>
