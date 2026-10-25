@@ -55,4 +55,4 @@ Linux ou macOS com `bash` (no Windows, use o Git Bash), Git, Node.js 18+,
 Python 3.10+ e o toolchain do projeto testado.
 
 Documentação completa, regras de segurança e limites conhecidos:
-https://github.com/Pedronovaesdev/test-graph-selector
+https://github.com/Pedronovaesdev/test-graph

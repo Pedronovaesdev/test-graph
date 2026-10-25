@@ -17,7 +17,7 @@
   "author": "Pedronovaesdev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Pedronovaesdev/test-graph-selector.git",
+    "url": "git+https://github.com/Pedronovaesdev/test-graph.git",
     "directory": "selector"
   },
   "bin": {

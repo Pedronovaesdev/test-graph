@@ -526,8 +526,10 @@ demo/
 .github/workflows/action-selftest.yml  testa a GitHub Action com uses: ./
 action.yml                      a GitHub Action (uses: Pedronovaesdev/test-graph@v1)
 requirements.txt                indexador AST (graphifyy==0.9.90)
-legacy/                         implementação anterior (motor Java/JGraphT), não usada
 ```
+
+A implementação anterior (motor Java/JGraphT) foi removida do repositório; ela
+continua disponível na tag `legacy-java`.
 
 ## Créditos
 
