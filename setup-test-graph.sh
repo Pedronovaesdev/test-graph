@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Registra o comando test-graph no PATH de shells Bash ou Zsh.
+# Registra os comandos tgph e test-graph no PATH de shells Bash ou Zsh.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,11 +17,11 @@ esac
 
 mkdir -p "$CONFIG_DIR"
 {
-  printf 'export TEST_GRAPH_HOME=%q\n' "$ROOT_DIR"
+  printf 'export tgph=%q\n' "$ROOT_DIR"
   cat <<'EOF'
 case ":$PATH:" in
-  *":$TEST_GRAPH_HOME:"*) ;;
-  *) export PATH="$TEST_GRAPH_HOME:$PATH" ;;
+  *":$tgph:"*) ;;
+  *) export PATH="$tgph:$PATH" ;;
 esac
 EOF
 } > "$ENV_FILE"
@@ -29,8 +29,8 @@ EOF
 PROFILE_LINE='. "$HOME/.config/test-graph/env.sh"'
 touch "$PROFILE"
 if ! grep -Fqx "$PROFILE_LINE" "$PROFILE"; then
-  printf '\n# Comando test-graph\n%s\n' "$PROFILE_LINE" >> "$PROFILE"
+  printf '\n# Comandos tgph e test-graph\n%s\n' "$PROFILE_LINE" >> "$PROFILE"
 fi
 
 printf 'Comando instalado. Reinicie o terminal ou execute: source %q\n' "$ENV_FILE"
-printf 'Depois use: test-graph --base HEAD~1 --head HEAD --project .\n'
+printf 'Depois use: tgph --base HEAD~1 --head HEAD --project .\n'
