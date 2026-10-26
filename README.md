@@ -63,7 +63,7 @@ flowchart LR
     B["graphify extract<br/>(AST → graph.json)"] --> C
     subgraph C["selector (TypeScript)"]
         direction TB
-        C1["1. regras de segurança<br/>por arquivo"] --> C2["2. sementes =<br/>nós dos arquivos alterados"]
+        C1["1. regras de segurança<br/>por arquivo"] --> C2["2. sementes =<br/>símbolos alterados"]
         C2 --> C3["3. BFS reversa<br/>sem limite"]
         C3 --> C4["4. filtra os nós<br/>que são teste"]
         C4 --> C5["5. relatório<br/>+ comando"]
@@ -560,7 +560,7 @@ resolve a classe `Clock` (colide com `java.time.Clock`), e sem essa regra o resu
 
 <br/>
 
-- **Granularidade por arquivo.** O graphify registra só a linha **inicial** de cada símbolo, sem linha final, então todo símbolo de um arquivo alterado vira semente. Melhoria futura: `end_line` no extrator cruzado com os hunks do diff.
+- **Símbolo sem linha.** O graphify registra a linha inicial (`L10`); o seletor cruza isso com os hunks do diff e semeia só o símbolo alterado. Sem localização, com mudança fora de qualquer símbolo, ou com remoção pura de um bloco, a semente volta a ser o arquivo inteiro.
 - **Sobresseleção por barrels/reexports.** Quem importa `src/index.ts` depende de tudo que ele reexporta.
 - **Imports dinâmicos montados em runtime** (`import(\`./plugins/${name}\`)`, `require(variavel)`) não aparecem no AST. Mitigação: `full_suite_patterns` ou `data_patterns`.
 - **Classes com nome igual ao de uma classe do JDK** (ex.: `Clock`) não têm as referências resolvidas pelo graphify. A regra `no-dependents` pega o caso quando **ninguém** mais aponta para o arquivo.

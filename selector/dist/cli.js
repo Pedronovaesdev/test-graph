@@ -7422,8 +7422,92 @@ function parseNameStatus(output, prefix = "") {
   }
   return changes.sort((a, b) => compare(a.repoPath, b.repoPath) || compare(a.status, b.status));
 }
+function pathFromDiffHeader(line) {
+  const rest = line.slice("diff --git ".length);
+  if (rest.startsWith('"')) {
+    const endA = quotedTokenEnd(rest, 0);
+    if (endA < 0) return null;
+    const bAt = rest.indexOf('"', endA);
+    if (bAt < 0) return null;
+    const endB = quotedTokenEnd(rest, bAt);
+    if (endB < 0) return null;
+    return stripAB(unescapeGit(rest.slice(bAt + 1, endB - 1)));
+  }
+  const candidates = [];
+  let from = 0;
+  while (from < rest.length) {
+    const idx = rest.indexOf(" b/", from);
+    if (idx < 0) break;
+    const left = rest.slice(0, idx);
+    const right = rest.slice(idx + 1);
+    if (left.startsWith("a/") && right.startsWith("b/")) candidates.push({ a: left.slice(2), b: right.slice(2) });
+    from = idx + 1;
+  }
+  if (candidates.length === 0) return null;
+  const same = candidates.filter((c) => c.a === c.b);
+  return (same.length > 0 ? same[same.length - 1] : candidates[candidates.length - 1]).b;
+}
+function quotedTokenEnd(input, open) {
+  for (let i = open + 1; i < input.length; i++) {
+    if (input[i] === "\\") {
+      i += 1;
+      continue;
+    }
+    if (input[i] === '"') return i + 1;
+  }
+  return -1;
+}
+function unescapeGit(body) {
+  return body.replace(/\\(?:([abtnvfr"\\])|([0-7]{1,3}))/g, (_m, simple, octal) => {
+    if (octal !== void 0) return String.fromCharCode(parseInt(octal, 8));
+    const named = { a: "\x07", b: "\b", t: "	", n: "\n", v: "\v", f: "\f", r: "\r", '"': '"', "\\": "\\" };
+    return simple ? named[simple] ?? simple : _m;
+  });
+}
+function stripAB(p) {
+  return p.startsWith("a/") || p.startsWith("b/") ? p.slice(2) : p;
+}
+function parseUnifiedDiff(output) {
+  const hunks = /* @__PURE__ */ new Map();
+  let current = null;
+  for (const line of output.split(/\r?\n/)) {
+    if (line.startsWith("diff --git ")) {
+      current = pathFromDiffHeader(line);
+      if (current !== null && !hunks.has(current)) hunks.set(current, []);
+      continue;
+    }
+    const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (!header || current === null) continue;
+    const list = hunks.get(current);
+    if (!list) continue;
+    list.push({
+      oldStart: Number(header[1]),
+      oldCount: header[2] === void 0 ? 1 : Number(header[2]),
+      newStart: Number(header[3]),
+      newCount: header[4] === void 0 ? 1 : Number(header[4])
+    });
+  }
+  return hunks;
+}
+function changedLines(hunks, side) {
+  const lines = /* @__PURE__ */ new Set();
+  for (const hunk of hunks) {
+    const start = side === "new" ? hunk.newStart : hunk.oldStart;
+    const count = side === "new" ? hunk.newCount : hunk.oldCount;
+    if (count === 0) return null;
+    for (let i = 0; i < count; i++) lines.add(start + i);
+  }
+  if (lines.size === 0) return null;
+  return [...lines].sort((a, b) => a - b);
+}
 function changedFiles(repo, base, head, prefix = "") {
-  return parseNameStatus(git(repo, ["diff", "--name-status", "-z", "-M", `${base}...${head}`]), prefix);
+  const spec = `${base}...${head}`;
+  const changes = parseNameStatus(git(repo, ["diff", "--name-status", "-z", "-M", spec]), prefix);
+  const hunks = parseUnifiedDiff(git(repo, ["diff", "-U0", "--no-color", "--no-ext-diff", "-M", spec]));
+  for (const change of changes) {
+    change.hunks = hunks.get(change.repoPath) ?? (change.oldRepoPath !== null ? hunks.get(change.oldRepoPath) : void 0) ?? [];
+  }
+  return changes;
 }
 function filesAt(repo, rev, prefix = "") {
   const args = ["ls-tree", "-r", "--name-only", "-z", rev];
@@ -7452,6 +7536,13 @@ var DEFAULT_RELATIONS = /* @__PURE__ */ new Set([
 function normPath(p) {
   if (p === void 0 || p === null || p === "") return null;
   return String(p).replace(/\\/g, "/").replace(/^\.\//, "");
+}
+function parseSourceLocation(location) {
+  if (!location) return null;
+  const lines = [...location.matchAll(/L(\d+)/gi)].map((m) => Number(m[1]));
+  if (lines.length === 0 || lines.some((n) => n < 1)) return null;
+  if (lines.length > 1 && lines[lines.length - 1] < lines[0]) return null;
+  return { start: lines[0], end: lines.length > 1 ? lines[lines.length - 1] : null };
 }
 function push(map, key, value) {
   const list = map.get(key);
@@ -7522,9 +7613,38 @@ var DependencyGraph = class _DependencyGraph {
   hasFile(file) {
     return this.byFile.has(file);
   }
-  /** Sementes de um arquivo: o no do arquivo e todo simbolo definido nele. */
+  /** Nos de um arquivo: o no do arquivo e todo simbolo definido nele. */
   nodesInFile(file) {
     return [...this.byFile.get(file) ?? []];
+  }
+  /**
+   * Simbolos que cobrem cada linha alterada. `null` pede o arquivo inteiro:
+   * simbolo sem localizacao, linha antes do primeiro simbolo, ou linha fora
+   * de todo intervalo explicito.
+   *
+   * So com a linha inicial, o simbolo segue ate o proximo do mesmo arquivo
+   * (a linha fica com o maior inicio <= ela). Com fim (`L10-L18`), a linha
+   * tambem precisa cair nele; se o mais interno ja terminou, vale o de fora.
+   */
+  symbolsOnLines(file, lines) {
+    if (lines.length === 0) return null;
+    const fileNode = this.fileNode(file);
+    const symbols = [];
+    for (const id of this.byFile.get(file) ?? []) {
+      if (id === fileNode) continue;
+      const loc = parseSourceLocation(this.nodes.get(id).sourceLocation);
+      if (!loc) return null;
+      symbols.push({ id, ...loc });
+    }
+    if (symbols.length === 0) return null;
+    const matched = /* @__PURE__ */ new Set();
+    for (const line of lines) {
+      const owners = symbols.filter((s) => s.start <= line && (s.end === null || line <= s.end));
+      if (owners.length === 0) return null;
+      const start = Math.max(...owners.map((s) => s.start));
+      for (const owner of owners) if (owner.start === start) matched.add(owner.id);
+    }
+    return matched.size > 0 ? [...matched].sort(compare) : null;
   }
   sourceFile(node) {
     return this.nodes.get(node)?.sourceFile ?? null;
@@ -8009,6 +8129,15 @@ function compareRank(a, b) {
   }
   return a.length - b.length;
 }
+function seedNodes(graph, file, change, side) {
+  const all = graph.nodesInFile(file);
+  if (change.hunks === void 0 || change.status !== "M") return all;
+  const changedPath = side === "head" ? change.path : change.oldPath ?? change.path;
+  if (changedPath !== file) return all;
+  const lines = changedLines(change.hunks, side === "head" ? "new" : "old");
+  if (lines === null) return all;
+  return graph.symbolsOnLines(file, lines) ?? all;
+}
 function selectTests(changes, lang, allTests, head, base = null) {
   const universe = [...allTests].sort(compare);
   const existing = new Set(universe);
@@ -8064,10 +8193,11 @@ function selectTests(changes, lang, allTests, head, base = null) {
   sides.forEach(([graph, attr], order) => {
     if (!graph) return;
     const seeds = /* @__PURE__ */ new Map();
+    const side = attr === "headSeed" ? "head" : "base";
     for (const d of decisions) {
       const seedFile = d[attr];
       if (!seedFile) continue;
-      for (const node of graph.nodesInFile(seedFile)) if (!seeds.has(node)) seeds.set(node, seedFile);
+      for (const node of seedNodes(graph, seedFile, d.change, side)) if (!seeds.has(node)) seeds.set(node, seedFile);
     }
     if (seeds.size === 0) return;
     const visited = graph.reverseReach(seeds, DEFAULT_RELATIONS, lang.polymorphicRelations, (f) => f !== null && isTest(lang, f));

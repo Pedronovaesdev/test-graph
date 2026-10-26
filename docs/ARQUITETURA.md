@@ -326,6 +326,8 @@ Pergunta ao Git, sem analisar código.
     mudou, mesmo que a `main` tenha andado depois.
   - `-M` detecta renomeações. `-z` separa nomes com um caractere invisível, para
     nomes com espaço não quebrarem nada.
+  - Em seguida lê `git diff -U0` (sem linhas de contexto) e guarda os hunks em
+    `Change.hunks`. Contagem omitida no header vale 1.
 - **`parseNameStatus`** transforma a resposta em objetos `Change`:
 
   ```ts
@@ -425,7 +427,8 @@ isso a ordem do `graph.json` nunca muda o resultado.
 que segue setas de entrada:
 
 ```text
-fila = [math.ts, add(), multiply()]          ← sementes: tudo do arquivo alterado
+fila = [add()]          ← semente: símbolo cuja linha o hunk cobriu
+                         (se o símbolo não for identificado, entram todos os nós do arquivo)
 pega add()        → quem aponta para ele? cart.ts, Cart.total(), math.test.ts, ...
                     os não visitados entram na fila, guardando "vim de add()"
 pega Cart.total() → quem aponta? Cart, Cart.formattedTotal()
@@ -473,7 +476,8 @@ A função `selectTests(changes, lang, allTests, head, base)`:
 4. Adiciona os testes das pastas de snapshot/fixture; pasta sem testes → `full`.
 5. Se algum **código de produção** mudou, adiciona os testes com
    `always_run_markers` (ex.: `@SpringBootTest`).
-6. Junta as sementes e roda `reverseReach` no grafo do head e, se houver, no do
+6. Junta as sementes (símbolos cobertos pelos hunks, ou o arquivo inteiro se
+   não der para localizar) e roda `reverseReach` no grafo do head e, se houver, no do
    base.
 7. Dos nós alcançados: nó em arquivo de teste → teste selecionado; nó num
    `scope_files` (ex.: `conftest.py`) → todos os testes da pasta dele.
@@ -798,7 +802,7 @@ npm install -g ./test-graph-selector-1.0.0.tgz        # instala o comando select
 
 | Limite | Consequência |
 |---|---|
-| **Granularidade por arquivo**: o graphify não guarda a linha final de cada função | mudar uma função de um arquivo trata o arquivo inteiro como alterado |
+| **Símbolo sem intervalo fechado**: o graphify guarda a linha inicial, não o fim | o seletor atribui cada linha do hunk ao símbolo de maior início; se não der para identificar, semeia o arquivo inteiro |
 | **Barrels/reexports** | quem importa `index.ts` depende de tudo que ele reexporta (sobresseleção) |
 | **Imports dinâmicos montados em runtime** (`import(\`./${x}\`)`) | invisíveis; mitigar com `full_suite_patterns` |
 | **Classe com nome igual ao do JDK** (ex.: `Clock`) | o graphify não resolve; a regra `no-dependents` pega quando ninguém mais aponta para o arquivo |
@@ -853,7 +857,7 @@ Depois, troque a função `build_graph` em `selector/bin/select-tests.sh`.
 | **AST** | Árvore de sintaxe: a estrutura do código lida por um programa, sem executá-lo |
 | **base / head** | O commit de comparação / o commit analisado |
 | **merge-base** | O commit onde uma branch saiu da outra; o diff `base...head` parte dele |
-| **semente** | Nó do grafo onde a busca começa (tudo de um arquivo alterado) |
+| **semente** | Nó do grafo onde a busca começa. Numa modificação com hunks, só os símbolos cujas linhas mudaram; nos outros casos, todos os nós do arquivo |
 | **busca reversa** | Seguir as setas ao contrário: de "o que mudou" para "quem depende disso" |
 | **sobresseleção** | Rodar um teste que não precisava (seguro, mas custa tempo) |
 | **falso negativo** | Deixar de rodar um teste que precisava (o erro que a ferramenta mais evita) |

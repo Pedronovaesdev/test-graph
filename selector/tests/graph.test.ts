@@ -81,3 +81,43 @@ describe("DependencyGraph.reverseReach", () => {
     expect(g.dependents("src/b.ts").map((e) => e.source)).toEqual(["src/a.ts"]);
   });
 });
+
+describe("symbolsOnLines", () => {
+  const file = "src/utils/math.ts";
+  const add = `${file}#add()`;
+  const sub = `${file}#subtract()`;
+  const mul = `${file}#multiply()`;
+  const g = (locations: Record<string, string>) =>
+    graph([`${file} contains ${add}`, `${file} contains ${sub}`, `${file} contains ${mul}`], "head", [], locations);
+
+  it("atribui a linha ao simbolo de maior inicio", () => {
+    const found = g({ [add]: "L10", [sub]: "L20", [mul]: "L30" }).symbolsOnLines(file, [12, 13, 14, 15, 16]);
+    expect(found).toEqual([add]);
+  });
+
+  it("junta simbolos que comecam na mesma linha", () => {
+    const found = g({ [add]: "L10", [sub]: "L10", [mul]: "L30" }).symbolsOnLines(file, [12]);
+    expect(found).toEqual([add, sub]);
+  });
+
+  it("respeita o fim explicito e volta para o simbolo de fora", () => {
+    const cart = "src/cart.ts";
+    const total = `${cart}#.total()`;
+    const graphWithEnd = graph(
+      [`${cart} contains ${cart}#Cart`, `${cart}#Cart method ${total}`],
+      "head",
+      [],
+      { [`${cart}#Cart`]: "L5-L40", [total]: "L10-L18" },
+    );
+    expect(graphWithEnd.symbolsOnLines(cart, [12])).toEqual([total]);
+    expect(graphWithEnd.symbolsOnLines(cart, [25])).toEqual([`${cart}#Cart`]);
+    expect(graphWithEnd.symbolsOnLines(cart, [41])).toBeNull();
+  });
+
+  it("pede o arquivo inteiro quando a linha ou a localizacao nao identificam o simbolo", () => {
+    const located = g({ [add]: "L10", [sub]: "L20", [mul]: "L30" });
+    expect(located.symbolsOnLines(file, [2])).toBeNull();
+    expect(g({ [add]: "L10", [sub]: "sem-linha", [mul]: "L30" }).symbolsOnLines(file, [12])).toBeNull();
+    expect(located.symbolsOnLines(file, [])).toBeNull();
+  });
+});
