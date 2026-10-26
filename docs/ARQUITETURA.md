@@ -63,6 +63,7 @@ Três princípios guiam o projeto:
 test-graph-selector/
 ├── select-tests.sh                 atalho: chama selector/bin/select-tests.sh
 ├── requirements.txt                única dependência Python: graphifyy==0.9.90
+├── ci/gitlab/                      GitLab CI: template (.test-graph-selector) + run.sh do job
 ├── README.md                       documentação de uso
 │
 ├── selector/                       A FERRAMENTA (é também o pacote npm)
@@ -100,7 +101,7 @@ test-graph-selector/
 ├── .github/workflows/
 │   ├── selective-tests.yml         CI: testa a ferramenta e os 5 demos
 │   ├── release.yml                 publica o pacote no npm (disparo manual)
-│   └── action-selftest.yml         testa a GitHub Action (action.yml) com uses: ./
+│   └── action-selftest.yml         testa a GitHub Action (uses: ./) e o run.sh do GitLab
 │
 └── docs/ARQUITETURA.md             este documento
 ```

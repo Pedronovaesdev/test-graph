@@ -186,25 +186,53 @@ seleção e executa os testes. O relatório aparece no **Job Summary** do run.
 </details>
 
 <details>
-<summary><b>GitLab CI, Bitbucket e outros</b></summary>
+<summary><b>GitLab CI</b></summary>
 
 <br/>
 
-O passo é o mesmo em qualquer CI: clone completo, graphify instalado e o script.
-Exemplo ilustrativo (não testado no GitLab):
+O template [`ci/gitlab/test-graph-selector.yml`](ci/gitlab/test-graph-selector.yml) faz o
+mesmo que a Action: instala o graphify, restaura o cache, pega a base do merge request
+(`CI_MERGE_REQUEST_DIFF_BASE_SHA`) ou do push, seleciona e roda os testes.
 
 ```yaml
 # .gitlab-ci.yml
+include:
+  - remote: "https://raw.githubusercontent.com/Pedronovaesdev/test-graph/v1/ci/gitlab/test-graph-selector.yml"
+
 testes:
-  image: node:20
-  variables:
-    GIT_DEPTH: 0
-  script:
-    - apt-get update && apt-get install -y python3-venv
-    - python3 -m venv /tmp/tgs && /tmp/tgs/bin/pip install graphifyy==0.9.90
-    - npm ci
-    - git clone --depth 1 https://github.com/Pedronovaesdev/test-graph.git /tmp/test-graph
-    - GRAPHIFY=/tmp/tgs/bin/graphify /tmp/test-graph/select-tests.sh --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --head HEAD
+  extends: .test-graph-selector
+  image: node:20                  # precisa de Node 18+, python3 (com venv), git e bash
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq python3-venv
+    - npm ci                      # o que a suíte do projeto precisar
+  # variables:                    # todas opcionais
+  #   TGS_PROJECT: apps/web       # monorepo
+  #   TGS_LANG: angular
+  #   TGS_DRY_RUN: "true"         # só seleciona e explica
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+```
+
+Coloque as dependências em `before_script:` e não sobrescreva `script:`. O relatório
+fica nos artefatos do job (`tgs-report/`, com link no merge request), e o modo e as
+contagens vão como variáveis `TGS_MODE`, `TGS_SELECTED` e `TGS_TOTAL` para os jobs
+seguintes (dotenv). A lógica do job está em [`ci/gitlab/run.sh`](ci/gitlab/run.sh),
+testado no CI deste repositório com as variáveis do GitLab simuladas.
+
+</details>
+
+<details>
+<summary><b>Bitbucket, Jenkins e outros</b></summary>
+
+<br/>
+
+O passo é o mesmo em qualquer CI: clone completo (sem `--depth`), Node, graphify
+instalado e o script.
+
+```bash
+python3 -m venv /tmp/tgs && /tmp/tgs/bin/pip install graphifyy==0.9.90
+git clone --depth 1 --branch v1 https://github.com/Pedronovaesdev/test-graph.git /tmp/test-graph
+GRAPHIFY=/tmp/tgs/bin/graphify TGS_NO_BUILD=1 /tmp/test-graph/select-tests.sh --base origin/main --head HEAD
 ```
 
 </details>
@@ -579,6 +607,7 @@ resolve a classe `Clock` (colide com `java.time.Clock`), e sem essa regra o resu
 
 ```text
 ├── action.yml                    GitHub Action (uses: Pedronovaesdev/test-graph@v1)
+├── ci/gitlab/                    template de GitLab CI (include + extends) e o run.sh do job
 ├── select-tests.sh               atalho para selector/bin/select-tests.sh
 ├── requirements.txt              indexador AST (graphifyy==0.9.90)
 ├── selector/                     o pacote (TypeScript + Jest)

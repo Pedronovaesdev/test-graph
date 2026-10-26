@@ -1,0 +1,50 @@
+# Template de GitLab CI do test-graph-selector: o equivalente da GitHub Action.
+#
+# No .gitlab-ci.yml do projeto:
+#
+#   include:
+#     - remote: "https://raw.githubusercontent.com/Pedronovaesdev/test-graph/v1/ci/gitlab/test-graph-selector.yml"
+#
+#   testes:
+#     extends: .test-graph-selector
+#     image: node:20                 # Node 18+, python3 com venv, git e bash
+#     before_script:
+#       - npm ci                     # o que a suite do projeto precisar
+#     variables:
+#       TGS_PROJECT: "."             # opcional, ver run.sh
+#
+# O job clona a ferramenta na versao TGS_VERSION (sem npm ci nem build: o
+# seletor vem pronto em selector/dist/cli.js) e chama ci/gitlab/run.sh.
+# Nao sobrescreva `script:`; dependencias do projeto vao em `before_script:`.
+
+.test-graph-selector:
+  variables:
+    GIT_DEPTH: "0" # sem o historico completo o git diff base...head falha
+    TGS_VERSION: "v1"
+    TGS_REPO: "https://github.com/Pedronovaesdev/test-graph.git"
+    TGS_PROJECT: "."
+    TGS_LANG: ""
+    TGS_BASE: ""
+    TGS_DRY_RUN: "false"
+    GRAPHIFY_VERSION: "0.9.90"
+  cache:
+    # O run.sh copia <projeto>/graphify-out para .tgs-cache/ e de volta.
+    key: "tgs-graphify-$GRAPHIFY_VERSION-$CI_JOB_NAME_SLUG"
+    paths:
+      - .tgs-cache/
+    when: always
+  script:
+    - |
+      if [ -z "${TGS_DIR:-}" ]; then
+        TGS_DIR="${TMPDIR:-/tmp}/test-graph-$TGS_VERSION"
+        rm -rf "$TGS_DIR"
+        git clone --quiet --depth 1 --branch "$TGS_VERSION" "$TGS_REPO" "$TGS_DIR"
+      fi
+      bash "$TGS_DIR/ci/gitlab/run.sh"
+  artifacts:
+    when: always
+    expose_as: "Selecao de testes"
+    paths:
+      - tgs-report/
+    reports:
+      dotenv: tgs-report/tgs.env
