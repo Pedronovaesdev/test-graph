@@ -56,3 +56,35 @@ jobs:
             selective|full|none) ;;
             *) echo "::error::saida 'mode' inesperada: '$MODE'"; exit 1 ;;
           esac
+
+  # Testa o template do GitLab CI (ci/gitlab/run.sh) com as variaveis que o
+  # GitLab define num merge request. O include e o clone ficam de fora: so o
+  # GitLab executa o .yml do template.
+  gitlab-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Dependencias do demo (typescript)
+        working-directory: demo/ts-project
+        run: npm ci
+
+      - name: run.sh como num merge request do GitLab
+        env:
+          CI_MERGE_REQUEST_DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          TGS_PROJECT: demo/ts-project
+        run: bash ci/gitlab/run.sh
+
+      - name: Conferir as saidas (dotenv)
+        run: |
+          cat tgs-report/tgs.env
+          grep -Eq '^TGS_MODE=(selective|full|none)$' tgs-report/tgs.env || {
+            echo "::error::TGS_MODE inesperado em tgs-report/tgs.env"
+            exit 1
+          }
+          test -d .tgs-cache/graphify-out || { echo "::error::cache do indexador nao foi salvo"; exit 1; }
