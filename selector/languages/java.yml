@@ -8,8 +8,10 @@ test_patterns:
   - "src/test/java/**/*Test.java"
   - "src/test/java/**/*Tests.java"
   - "src/test/java/**/*IT.java"
+  - "src/test/java/**/Test*.java"
   - "**/src/test/java/**/*Test.java"
   - "**/src/test/java/**/*Tests.java"
+  - "**/src/test/java/**/Test*.java"
 
 full_suite_patterns:
   - "pom.xml"

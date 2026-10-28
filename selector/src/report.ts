@@ -62,6 +62,7 @@ export function explain(selection: Selection, test: string, reason: Reason): str
     return `${test} [usa ${reason.scope}: sobe a aplicacao inteira; roda com qualquer mudanca de codigo, ex.: ${reason.seedFile}]`;
   }
   if (reason.kind === "data-file") return `${test} [mesmo diretorio do snapshot/fixture ${reason.seedFile}]`;
+  if (reason.kind === "manual-mapping") return `${test} [mapeamento manual '${reason.scope}' para ${reason.seedFile}]`;
   const graph = selection.graphs.get(reason.graph ?? "head")!;
   const tail = `[alterado em ${reason.seedFile}${reason.graph === "base" ? ", via grafo do base" : ""}]`;
   const parts: string[] = [];

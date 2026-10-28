@@ -9,7 +9,7 @@ import * as rules from "./rules";
 export type Mode = "selective" | "full" | "none";
 
 export interface Reason {
-  kind: "changed-test" | "data-file" | "dependency" | "always-run";
+  kind: "changed-test" | "data-file" | "dependency" | "always-run" | "manual-mapping";
   seedFile: string | null;
   graph: string | null;
   steps: Step[];
@@ -140,6 +140,24 @@ export function selectTests(
       }
     }
   });
+
+  for (const d of decisions) {
+    const changedFiles = [d.headSeed, d.baseSeed].filter((file, index, all): file is string => file !== null && all.indexOf(file) === index);
+    for (const seedFile of changedFiles) {
+      for (const mapping of lang.testMappings) {
+        if (!matches(seedFile, [mapping.source])) continue;
+        for (const test of universe.filter((candidate) => matches(candidate, mapping.tests) !== null)) {
+          offer(test, [2, -1, mapping.source, test], {
+            kind: "manual-mapping",
+            seedFile,
+            graph: null,
+            steps: [],
+            scope: mapping.source,
+          });
+        }
+      }
+    }
+  }
 
   const tests = new Map([...best.entries()].sort(([a], [b]) => compare(a, b)).map(([t, v]) => [t, v.reason]));
   return result(tests.size > 0 ? "selective" : "none", tests);

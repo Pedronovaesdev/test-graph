@@ -101,6 +101,8 @@ export interface LanguageConfig {
    * de producao muda.
    */
   alwaysRunMarkers: string[];
+  /** Associacoes manuais entre arquivos de producao e testes com nomes divergentes. */
+  testMappings: Array<{ source: string; tests: string[] }>;
 }
 
 export function isTest(lang: LanguageConfig, file: string): boolean {
@@ -143,6 +145,25 @@ function stringList(raw: Record<string, unknown>, key: string, fallback: string[
   return value.map(String);
 }
 
+function testMappings(raw: Record<string, unknown>, file: string): Array<{ source: string; tests: string[] }> {
+  const value = raw.test_mappings;
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error(`${file}: campo 'test_mappings' deve ser uma lista`);
+  return value.map((entry, index) => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`${file}: test_mappings[${index}] deve ser um objeto`);
+    }
+    const mapping = entry as Record<string, unknown>;
+    if (typeof mapping.source !== "string" || mapping.source.trim() === "") {
+      throw new Error(`${file}: test_mappings[${index}].source deve ser um glob nao vazio`);
+    }
+    if (!Array.isArray(mapping.tests) || mapping.tests.length === 0 || mapping.tests.some((test) => typeof test !== "string" || test.trim() === "")) {
+      throw new Error(`${file}: test_mappings[${index}].tests deve ser uma lista de globs nao vazia`);
+    }
+    return { source: mapping.source, tests: mapping.tests as string[] };
+  });
+}
+
 export function loadLanguage(nameOrPath: string): LanguageConfig {
   const file = path.extname(nameOrPath) ? path.resolve(nameOrPath) : path.join(LANGUAGES_DIR, `${nameOrPath}.yml`);
   if (!fs.existsSync(file)) {
@@ -171,5 +192,6 @@ export function loadLanguage(nameOrPath: string): LanguageConfig {
     polymorphicRelations: new Set(stringList(raw, "polymorphic_relations")),
     scopeFiles: stringList(raw, "scope_files"),
     alwaysRunMarkers: stringList(raw, "always_run_markers"),
+    testMappings: testMappings(raw, file),
   };
 }

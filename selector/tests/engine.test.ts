@@ -135,6 +135,63 @@ describe("selectTests", () => {
     const s = selectTests([change("M", "src/main/java/Email.java")], java, ["src/test/java/CheckoutTest.java"], g);
     expect(selectedTests(s)).toEqual(["src/test/java/CheckoutTest.java"]);
   });
+
+  it.each(["src/test/java/CalculatorTests.java", "src/test/java/TestCalculator.java"])(
+    "reconhece convencao de teste Java: %s",
+    (testFile) => {
+      const s = selectTests([change("A", testFile)], java, [testFile], graph([]));
+      expect(selectedTests(s)).toEqual([testFile]);
+      expect(s.tests.get(testFile)?.kind).toBe("changed-test");
+    },
+  );
+
+  it("mapeamento manual seleciona e explica teste com nome divergente", () => {
+    const source = "src/main/java/com/acme/OrderService.java";
+    const mappedTest = "src/test/java/com/acme/OrderFlowSpec.java";
+    const lang = {
+      ...java,
+      testMappings: [{ source: "src/main/java/com/acme/OrderService.java", tests: ["src/test/java/com/acme/OrderFlowSpec.java"] }],
+    };
+    const tests = [mappedTest, "src/test/java/OtherTest.java"];
+    const s = selectTests([change("M", source)], lang, tests, graph([], "head", [source]));
+    expect(s.mode).toBe("selective");
+    expect(selectedTests(s)).toEqual([mappedTest]);
+    expect(s.tests.get(mappedTest)?.kind).toBe("manual-mapping");
+    expect(buildReport(s, { base: "b", head: "h", lang }).tests[0].explanation).toContain("mapeamento manual");
+  });
+
+  it("mudanca em arquivo Java seleciona testes ligados a overloads diferentes", () => {
+    const source = "src/main/java/Calculator.java";
+    const g = graph([
+      `${source} contains ${source}#Calculator`,
+      `${source}#Calculator method ${source}#Calculator.add_int`,
+      `${source}#Calculator method ${source}#Calculator.add_decimal`,
+      "src/test/java/IntegerTest.java calls src/main/java/Calculator.java#Calculator.add_int",
+      "src/test/java/DecimalTest.java calls src/main/java/Calculator.java#Calculator.add_decimal",
+    ]);
+    const tests = ["src/test/java/IntegerTest.java", "src/test/java/DecimalTest.java"];
+    const s = selectTests([change("M", source)], java, tests, g);
+    expect(selectedTests(s)).toEqual([...tests].sort());
+  });
+
+  it("remove ou renomeia metodo ainda seleciona consumidores pelo grafo do base", () => {
+    const source = "src/main/java/Calculator.java";
+    const test = "src/test/java/LegacyCalculatorTest.java";
+    const base = graph([
+      `${source} contains ${source}#Calculator`,
+      `${source}#Calculator method ${source}#Calculator.old_total`,
+      `${test} calls ${source}#Calculator.old_total`,
+    ], "base");
+    const currentTest = "src/test/java/CalculatorTest.java";
+    const head = graph([
+      `${source} contains ${source}#Calculator`,
+      `${source}#Calculator method ${source}#Calculator.total`,
+      `${currentTest} calls ${source}#Calculator.total`,
+    ], "head");
+    const s = selectTests([change("M", source)], java, [test, currentTest], head, base);
+    expect(selectedTests(s)).toEqual([currentTest, test].sort());
+    expect(s.tests.get(test)?.graph).toBe("base");
+  });
 });
 
 describe("python", () => {

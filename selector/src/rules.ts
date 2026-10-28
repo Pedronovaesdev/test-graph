@@ -130,7 +130,13 @@ export function classify(
       // ou quem usa e o framework (bean Spring com @EventListener). Na duvida,
       // suite completa. Arquivo novo fica de fora: ninguem o usa ainda.
       const modified = change.status === "M" || change.status === "R";
-      if (!forcedTest && modified && isSource(lang, current) && !head.hasDependents(current, DEFAULT_RELATIONS, lang.polymorphicRelations)) {
+      if (
+              !forcedTest &&
+              modified &&
+              isSource(lang, current) &&
+              !lang.testMappings.some((mapping) => matches(current, [mapping.source]) !== null) &&
+              !head.hasDependents(current, DEFAULT_RELATIONS, lang.polymorphicRelations)
+            ) {
         hits.push({ rule: NO_DEPENDENTS, path: current, detail: "codigo modificado sem nenhum dependente no grafo (indexador pode ter perdido referencias)" });
       } else if (!forcedTest) {
         hits.push({ rule: GRAPH_SEED, path: current, detail: "no grafo do head" });
