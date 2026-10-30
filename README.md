@@ -93,8 +93,10 @@ arestas do modo padrão e é byte a byte determinístico.
 ## Instalação
 
 Requisitos: **Git**, **Node.js 18+**, **Python 3.10+** (para o indexador) e o
-toolchain do projeto testado: Node/Jest, Java 17+ com Maven (Gradle vem pelo
-wrapper `./gradlew`) ou Python com pytest.
+toolchain do projeto testado: Node/npm com Jest ou Vitest, Java 17+ com Maven
+(Gradle exige o wrapper executável `./gradlew`) ou Python com pytest. O script
+valida Git/referências e a disponibilidade do executor antes de indexar; sem
+diferenças entre base e head, encerra com sucesso sem iniciar análise.
 
 ```bash
 pip install -r requirements.txt          # graphifyy==0.9.90 (indexador AST)
@@ -238,7 +240,7 @@ Princípio: **na dúvida, roda mais**. Cada regra disparada aparece no relatóri
 | Regra | Quando | Efeito |
 |---|---|---|
 | `global-config` | `.github/workflows/**` (caminho a partir da raiz do repo) | suíte completa |
-| `build-config` | `package.json`, lockfiles, `jest.config.*`, `tsconfig*.json`, `.env*`, `pom.xml`, `build.gradle*`, `src/*/resources/**`... | suíte completa |
+| `build-config` | `package.json`, lockfiles, configurações `.yml`/`.yaml`/`.properties`, scripts SQL/migrations, especificações OpenAPI/Swagger, configurações de build/JVM e `src/*/resources/**`... | suíte completa |
 | `source-not-in-graph` | arquivo de código que o indexador não modelou | suíte completa |
 | `unclassified-file` | arquivo fora do grafo e de qualquer regra (asset, dado...) | suíte completa |
 | `no-dependents` | código **modificado** que está no grafo, mas que nenhum outro arquivo usa (indexador perdeu as setas, ou só o framework usa: bean com `@EventListener`/`@Scheduled`) | suíte completa |
@@ -475,8 +477,22 @@ Campos do YAML:
 | `scope_files` | Arquivo que vale para a pasta inteira sem import (ex.: `conftest.py`). Se a busca o alcança, todos os testes da pasta entram. |
 | `polymorphic_relations` | Relações seguidas também no sentido direto (interface/herança). |
 | `always_run_markers` | Anotações/símbolos que marcam testes de aplicação inteira (ex.: `SpringBootTest`): rodam com qualquer mudança de código de produção. |
+| `test_mappings` | Associa um glob de arquivo de produção a globs de teste com nomes divergentes. |
 | `ignore_patterns` | Opcional. Padrão: documentação (`*.md`, `docs/**`...). |
 | `command` / `full_command` | Comandos de teste. Marcadores: `{files}` (caminhos separados por espaço), `{classes}` (nomes de classe separados por vírgula), `{each_file:TPL}` / `{each_class:TPL}` (repete `TPL` trocando `%s`, ex.: Gradle `{each_class:--tests %s}`). |
+
+Exemplo de associação manual para um teste cujo nome não segue a convenção:
+
+```yaml
+test_mappings:
+  - source: "**/OrderService.java"
+    tests:
+      - "**/OrderFlowSpec.java"
+```
+
+Quando `OrderService.java` muda, os arquivos de teste que casarem com esses globs
+são selecionados e o relatório identifica a associação manual. Os padrões são
+relativos à raiz do projeto e só selecionam testes que existem no commit `head`.
 
 Os quatro YAMLs reais estão em [selector/languages/](selector/languages/).
 
