@@ -125,7 +125,14 @@ Este repositório é também uma GitHub Action. Em qualquer outro repositório:
 ```yaml
 name: Testes
 
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches: [main]                  # push só na main: num PR, não roda duas vezes
+
+concurrency:                          # push novo no PR cancela a execução anterior
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   testes:
@@ -155,6 +162,19 @@ seleção e executa os testes. O relatório aparece no **Job Summary** do run.
 > Para Java use `actions/setup-java`; para Python, `actions/setup-python` + `pip install`.
 > A Action não troca a versão da linguagem do seu projeto.
 
+**Pipelines velhas e duplicadas.** O `concurrency` do exemplo cancela a execução
+anterior quando chega um push novo no mesmo PR (na `main`, cada commit roda até o
+fim), e `push` restrito à `main` evita rodar os testes duas vezes no mesmo commit
+(push + PR). Uma composite action não pode declarar `concurrency`: isso fica no seu
+workflow.
+
+**Árvore já testada** (`skip-tested-tree: true`, opcional). Se o conteúdo do commit
+(a *tree* do git) já passou nos testes com a mesma ferramenta, configuração e runner, a
+Action pula tudo e devolve `mode=skipped`. Pega re-runs, rebases e amends que não
+mudam conteúdo. Dois limites: o que está fora do repositório (serviços, segredos,
+dados externos) não entra na chave, por isso vem desligado; e o cache do GitHub não
+deixa a `main` ler o cache de um PR, então o merge na `main` ainda roda de novo.
+
 <details>
 <summary><b>Entradas e saídas da Action</b></summary>
 
@@ -169,10 +189,11 @@ seleção e executa os testes. O relatório aparece no **Job Summary** do run.
 | `dry-run` | `false` | `true` = só seleciona e explica, sem rodar os testes |
 | `graphify-version` | `0.9.90` | Versão do indexador AST |
 | `cache` | `true` | Guarda o cache do graphify entre execuções (só os arquivos alterados são relidos) |
+| `skip-tested-tree` | `false` | `true` = pula tudo se este conteúdo já passou com a mesma ferramenta, configuração e runner |
 
 | Saída | Descrição |
 |---|---|
-| `mode` | `selective`, `full`, `none` ou `fail-safe` |
+| `mode` | `selective`, `full`, `none`, `fail-safe` ou `skipped` (árvore já testada) |
 | `selected` | Quantos testes foram selecionados |
 | `total` | Quantos testes existem no projeto |
 | `report` | Caminho do `report.json` |
@@ -209,9 +230,40 @@ testes:
   #   TGS_PROJECT: apps/web       # monorepo
   #   TGS_LANG: angular
   #   TGS_DRY_RUN: "true"         # só seleciona e explica
+  #   TGS_SKIP_TESTED_TREE: "true" # pula se este conteúdo já passou
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 ```
+
+**Pipelines velhas e duplicadas.** O job do template é `interruptible: true`: com o
+auto-cancel do GitLab (ligado por padrão), um commit novo na mesma branch cancela a
+pipeline anterior. O template não define `workflow:`, que mandaria na pipeline inteira
+do seu projeto; para não rodar a pipeline de branch e a de MR no mesmo commit, e para
+nunca cancelar na branch padrão, coloque no seu `.gitlab-ci.yml`:
+
+```yaml
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never                 # branch com MR aberto: só a pipeline do MR
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  auto_cancel:
+    on_new_commit: interruptible
+
+testes:
+  extends: .test-graph-selector
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      interruptible: false        # na branch padrão, cada commit roda até o fim
+    - when: on_success
+```
+
+**Árvore já testada** (`TGS_SKIP_TESTED_TREE: "true"`, opcional): igual ao
+`skip-tested-tree` da Action. As chaves ficam no cache do job
+(`.tgs-cache/tested-trees.txt`), e o modo vai como `TGS_MODE=skipped`. Com
+"caches separados para branches protegidas" (o padrão do GitLab), a branch padrão
+não lê o cache dos MRs.
 
 Coloque as dependências em `before_script:` e não sobrescreva `script:`. O relatório
 fica nos artefatos do job (`tgs-report/`, com link no merge request), e o modo e as
@@ -258,6 +310,39 @@ pip install -r requirements.txt            # graphifyy==0.9.90 (indexador AST)
 
 Os relatórios ficam em `<projeto>/.selector-out/` (`report.txt`, `report.json`,
 `report.md`, `selected-tests.txt`, `command.txt`, `mode.txt`).
+
+### Antes do push (hook de pre-push)
+
+Roda os testes afetados na sua máquina a cada `git push` e bloqueia o push se eles
+falharem: o resultado chega em segundos, sem esperar a fila do CI, e o push quebrado
+nem sai. Funciona igual para pushes feitos por agentes de código.
+
+```bash
+cd ../meu-projeto
+bash ../test-graph/selector/bin/install-hook.sh                 # repositório inteiro
+bash ../test-graph/selector/bin/install-hook.sh --project apps/web --lang angular \
+  --graphify ~/tgs-venv/bin/graphify                            # opções viram padrão no hook
+bash ../test-graph/selector/bin/install-hook.sh --uninstall
+```
+
+A comparação é contra o merge-base com a branch padrão do remoto (`origin/main`),
+como o PR vai fazer. O que acontece em cada caso:
+
+| Seleção | Hook |
+|---|---|
+| Nenhum teste afetado (só docs) | Push segue |
+| Seletiva | Roda os testes escolhidos; **se falharem, bloqueia o push** |
+| Suíte completa | Não roda localmente: avisa e o push segue (o CI cobre). `TGS_HOOK_ON_FULL=run` roda, `block` bloqueia |
+| Ferramenta ausente ou com erro | Avisa e o push segue |
+
+Na dúvida o hook nunca trava o push: quem garante é o CI, o hook só adianta o
+resultado. Outras variáveis: `TGS_HOOK_MAX_TESTS` (acima disso, conta como suíte
+completa), `TGS_HOOK_BASE` (outra base) e `TGS_SKIP=1` (pula o hook, como
+`git push --no-verify`). Os testes rodam na árvore de trabalho: se houver mudança
+não commitada, o hook avisa.
+
+Já usa husky, lefthook ou pre-commit? Chame o script deles, repassando os
+argumentos e o stdin do git: `bash <test-graph>/selector/bin/pre-push.sh "$@"`.
 
 <details>
 <summary><b>Todas as opções do <code>select-tests.sh</code></b></summary>
@@ -613,11 +698,13 @@ resolve a classe `Clock` (colide com `java.time.Clock`), e sem essa regra o resu
 ├── selector/                     o pacote (TypeScript + Jest)
 │   ├── bin/select-tests.sh       orquestrador: diff → grafo → seleção → execução
 │   ├── bin/graphify-fast.py      wrapper do graphify (≈3x mais rápido, corrige extends do tsconfig)
+│   ├── bin/pre-push.sh           hook de pre-push: testes afetados antes do push
+│   ├── bin/install-hook.sh       instala/remove o hook no repositório atual
 │   ├── src/                      cli · diff · languages · graph · rules · engine · report
 │   ├── dist/cli.js               seletor empacotado (esbuild), versionado: usado direto pela Action
 │   ├── languages/                typescript · vitest · angular · java · java-gradle · python
 │   └── tests/                    testes da ferramenta (grafos montados à mão)
-├── demo/                         ts · java · java-gradle · python · spring + compare.sh e prove-safety.sh
+├── demo/                         ts · java · java-gradle · python · spring + compare.sh, prove-safety.sh e hook-test.sh
 ├── docs/                         ARQUITETURA.md · RESULTADOS.md
 └── .github/workflows/            selective-tests · action-selftest · release
 ```
