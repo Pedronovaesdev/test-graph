@@ -7,7 +7,7 @@ branding:
 
 inputs:
   base:
-    description: "Commit de comparacao. Vazio = base do PR (pull_request) ou commit anterior ao push."
+    description: "Commit de comparacao. Vazio = base do PR (pull_request), base do grupo (merge_group) ou commit anterior ao push. Sem base disponivel, roda a suite completa."
     required: false
     default: ""
   head:
@@ -140,24 +140,26 @@ runs:
         INPUT_BASE: ${{ inputs.base }}
         EVENT_NAME: ${{ github.event_name }}
         PR_BASE: ${{ github.event.pull_request.base.sha }}
+        GROUP_BASE: ${{ github.event.merge_group.base_sha }}
         PUSH_BEFORE: ${{ github.event.before }}
       run: |
         base="$INPUT_BASE"
         if [ -z "$base" ]; then
-          if [ "$EVENT_NAME" = "pull_request" ] || [ "$EVENT_NAME" = "pull_request_target" ]; then
-            base="$PR_BASE"
-          else
-            base="$PUSH_BEFORE"
-          fi
+          case "$EVENT_NAME" in
+            pull_request|pull_request_target) base="$PR_BASE" ;;
+            merge_group) base="$GROUP_BASE" ;;   # todos os PRs do grupo, nao so o ultimo commit
+            *) base="$PUSH_BEFORE" ;;
+          esac
         fi
-        if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-          if git rev-parse --verify --quiet HEAD~1 >/dev/null; then
-            echo "::notice::Base '$base' indisponivel; comparando com HEAD~1. Use actions/checkout com fetch-depth: 0."
-            base="$(git rev-parse HEAD~1)"
-          else
-            echo "::warning::Sem historico para comparar (checkout raso?). Use actions/checkout com fetch-depth: 0."
-            base="$(git rev-parse HEAD)"
-          fi
+        [ "$base" = "0000000000000000000000000000000000000000" ] && base=""
+        # Sem base confiavel nao ha como saber o que mudou: suite completa.
+        # (Comparar com HEAD~1 deixaria de fora os outros commits do push.)
+        if [ -z "$base" ]; then
+          echo "::warning::Sem commit de comparacao (push de branch nova?): rodando a suite completa."
+          echo "full=sem commit de comparacao (push de branch nova?)" >> "$GITHUB_OUTPUT"
+        elif ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+          echo "::warning::Commit base '$base' fora do clone (use actions/checkout com fetch-depth: 0): rodando a suite completa."
+          echo "full=commit base $base fora do clone (checkout raso?)" >> "$GITHUB_OUTPUT"
         fi
         echo "sha=$base" >> "$GITHUB_OUTPUT"
 
@@ -169,12 +171,17 @@ runs:
         TGS: ${{ github.action_path }}/selector/bin/select-tests.sh
         TGS_NO_BUILD: "1"
         BASE: ${{ steps.base.outputs.sha }}
+        FULL_REASON: ${{ steps.base.outputs.full }}
         HEAD_REF: ${{ inputs.head }}
         PROJECT: ${{ inputs.project }}
         LANG_INPUT: ${{ inputs.lang }}
         DRY_RUN: ${{ inputs.dry-run }}
       run: |
-        args=(--base "$BASE" --head "$HEAD_REF" --project "$PROJECT")
+        if [ -n "$FULL_REASON" ]; then
+          args=(--full-suite "$FULL_REASON" --project "$PROJECT")
+        else
+          args=(--base "$BASE" --head "$HEAD_REF" --project "$PROJECT")
+        fi
         [ -n "$LANG_INPUT" ] && args+=(--lang "$LANG_INPUT")
         [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
         out="$PROJECT/.selector-out"
