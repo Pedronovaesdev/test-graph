@@ -1,0 +1,340 @@
+{
+  "title": "Validação do test-graph-selector no Faker",
+  "evaluated_at": "2026-11-02",
+  "project": {
+    "path": "C:/Users/gabri/Residencia IV/faker-eval",
+    "name": "@faker-js/faker",
+    "version": "10.6.0",
+    "license": "MIT",
+    "origin": "https://github.com/faker-js/faker.git",
+    "baseline": "73afc25320da7ee0afa45cbd257d8950d4a02f89",
+    "baseline_subject": "fix(locale): use province names for zh_CN state abbreviations (#4233)",
+    "branch": "eval/test-graph-symbol-diff",
+    "upstream": null,
+    "pushed": false,
+    "package_manager": "pnpm@12.16.1",
+    "engines_node": "^22.13.0 || ^23.5.0 || >=24.0.0",
+    "test_script": "vitest",
+    "official_one_shot": "CI=true corepack pnpm run test"
+  },
+  "selectors": {
+    "before": {
+      "path": "C:/Users/gabri/Residencia IV/test-graph-before",
+      "commit": "45698b99560eb2f9ea208b1de43695816bb85606",
+      "subject": "Merge pull request #20 from Pedronovaesdev/chore/versao-1.1.0",
+      "seed": "nodesInFile"
+    },
+    "after": {
+      "path": "C:/Users/gabri/Residencia IV/test-graph-after",
+      "commit": "bda39042281b43b557e7005fe7c7bea98d5e4103",
+      "subject": "feat: detect changed symbols from diff hunks",
+      "seed": "symbolsOnLines, fallback to nodesInFile"
+    },
+    "modified": false
+  },
+  "environment": {
+    "node": "v24.19.0",
+    "npm": "11.17.0",
+    "pnpm": "12.16.1",
+    "corepack_pnpm": "12.16.1",
+    "python_on_path": "no version printed",
+    "graphify_on_path": "not found",
+    "embedded_python": "3.12.10",
+    "embedded_graphify": "0.9.90",
+    "git_bash": "5.2.37",
+    "log": "logs/00-ambiente.txt"
+  },
+  "official_suite": {
+    "without_build": {
+      "log": "logs/01-suite-sem-build.txt",
+      "result": "failed",
+      "failed_tests_reported": 80,
+      "cause": "missing dist: locale dynamic import, require.spec.cts, startup imports"
+    },
+    "green_after_build_and_cache_clear": {
+      "log": "logs/06-suite-oficial-cache-limpo.txt",
+      "exit": 0,
+      "wall_ms": 128102,
+      "duration_s": 124.38,
+      "test_files": "57 passed (57)",
+      "tests": "56578 passed | 490 expected fail | 696 skipped (57764)"
+    }
+  },
+  "language_detection": {
+    "stock_lang_vitest": {
+      "both_versions": {
+        "mode": "none",
+        "selected": 0,
+        "total": 0,
+        "rule": "graph-seed"
+      },
+      "cause": "selector vitest.yml test_patterns omit **/*.spec.ts and **/*.spec.cts",
+      "logs": ["logs/07-compat-before.txt", "logs/08-compat-after.txt"],
+      "wall_ms": { "before": 110005, "after": 31309 }
+    },
+    "minimum_config": "faker-vitest.yml",
+    "npx_rejected": "EBADDEVENGINES because devEngines requires pnpm 12.16.1",
+    "executable_command": "pnpm exec vitest run --passWithNoTests {files}"
+  },
+  "graph": {
+    "code_files": 3697,
+    "nodes": 6024,
+    "edges": 15505,
+    "stable_across_runs": 18
+  },
+  "chosen_file": "src/modules/helpers/_luhn-check.ts",
+  "set_hash": "91d1758f40ed",
+  "selected": [
+    "test/all-functional.spec.ts",
+    "test/faker.spec.ts",
+    "test/integration/modules/image.spec.ts",
+    "test/internal/base64.spec.ts",
+    "test/internal/bind-this-to-member-functions.spec.ts",
+    "test/internal/date.spec.ts",
+    "test/internal/locale-proxy.spec.ts",
+    "test/locale-data.spec.ts",
+    "test/locale-imports.spec.ts",
+    "test/modules/airline.spec.ts",
+    "test/modules/animal.spec.ts",
+    "test/modules/book.spec.ts",
+    "test/modules/color.spec.ts",
+    "test/modules/commerce.spec.ts",
+    "test/modules/company.spec.ts",
+    "test/modules/database.spec.ts",
+    "test/modules/datatype.spec.ts",
+    "test/modules/date.spec.ts",
+    "test/modules/finance-iban.spec.ts",
+    "test/modules/finance.spec.ts",
+    "test/modules/food.spec.ts",
+    "test/modules/git.spec.ts",
+    "test/modules/hacker.spec.ts",
+    "test/modules/helpers-eval.spec.ts",
+    "test/modules/helpers.spec.ts",
+    "test/modules/image.spec.ts",
+    "test/modules/internet.spec.ts",
+    "test/modules/location.spec.ts",
+    "test/modules/lorem.spec.ts",
+    "test/modules/medical.spec.ts",
+    "test/modules/music.spec.ts",
+    "test/modules/number.spec.ts",
+    "test/modules/person.spec.ts",
+    "test/modules/phone.spec.ts",
+    "test/modules/science.spec.ts",
+    "test/modules/string.spec.ts",
+    "test/modules/system.spec.ts",
+    "test/modules/vehicle.spec.ts",
+    "test/modules/word.spec.ts",
+    "test/simple-faker.spec.ts",
+    "test/utils/merge-locales.spec.ts",
+    "test/utils/mersenne.spec.ts"
+  ],
+  "not_selected": [
+    "test/core.spec.ts",
+    "test/distributors/exponential.spec.ts",
+    "test/distributors/uniform.spec.ts",
+    "test/docs/format.spec.ts",
+    "test/docs/versions.spec.ts",
+    "test/exports.spec.ts",
+    "test/internal/base32.spec.ts",
+    "test/internal/seed.spec.ts",
+    "test/require.spec.cts",
+    "test/scripts/apidocs/class.spec.ts",
+    "test/scripts/apidocs/method.spec.ts",
+    "test/scripts/apidocs/page.spec.ts",
+    "test/scripts/apidocs/verify-jsdoc-tags.spec.ts",
+    "test/scripts/shared/markdown.spec.ts"
+  ],
+  "scenarios": [
+    {
+      "id": 1,
+      "tag": "eval-s1-luhncheck",
+      "commit": "ef20f8c3b36ef69b34b693c1a437ce6ca33bf921",
+      "parent": "73afc25320da7ee0afa45cbd257d8950d4a02f89",
+      "symbol": "luhnCheck",
+      "diff": "line 7, === changed to !==",
+      "mode": "selective",
+      "selected": 42,
+      "total": 56,
+      "rules": { "graph-seed": 1 },
+      "set_identical_between_versions": true,
+      "before_chain_end": "src/modules/helpers/_luhn-check.ts",
+      "after_chain_end": "luhnCheck()",
+      "after_chains_with_contains": 39,
+      "full_suite": {
+        "log": "logs/s1-full-suite.txt",
+        "exit": 1,
+        "wall_ms": 92314,
+        "duration_s": 88.87,
+        "failed_tests": 66,
+        "deterministic_luhn_failures": 65,
+        "failed_files": [
+          "test/modules/finance.spec.ts",
+          "test/modules/helpers.spec.ts",
+          "test/modules/phone.spec.ts",
+          "test/simple-faker.spec.ts"
+        ],
+        "startup_timeout": "test/simple-faker.spec.ts > simpleFaker > should not log anything on startup"
+      },
+      "selected_suite": {
+        "log": "logs/s1-selected-pnpm.txt",
+        "exit": 1,
+        "wall_ms": 53240,
+        "duration_s": 49.62,
+        "vitest_files": "4 failed | 37 passed (41)",
+        "failed_tests": 66,
+        "startup_timeout": "test/faker.spec.ts > faker > should not log anything on startup"
+      },
+      "failed_left_out": [],
+      "safe": true
+    },
+    {
+      "id": 2,
+      "tag": "eval-s2-luhncheckvalue",
+      "commit": "10e0a983d97f5fccee8b3e35160e3a40e5c91f8f",
+      "parent": "73afc25320da7ee0afa45cbd257d8950d4a02f89",
+      "symbol": "luhnCheckValue",
+      "diff": "line 18, return checksum === 0 ? 1 : 0",
+      "mode": "selective",
+      "selected": 42,
+      "total": 56,
+      "rules": { "graph-seed": 1 },
+      "set_identical_to_scenario_1": true,
+      "before_chain_end": "src/modules/helpers/_luhn-check.ts",
+      "after_chain_end": "luhnCheckValue()",
+      "after_chains_with_contains": 3,
+      "contains_tests": [
+        "test/modules/finance.spec.ts",
+        "test/modules/helpers.spec.ts",
+        "test/modules/phone.spec.ts"
+      ],
+      "full_suite": {
+        "log": "logs/s2-full-suite.txt",
+        "exit": 1,
+        "wall_ms": 87042,
+        "duration_s": 83.19,
+        "failed_tests": 124,
+        "failed_files": [
+          "test/modules/finance.spec.ts",
+          "test/modules/helpers.spec.ts",
+          "test/modules/phone.spec.ts"
+        ],
+        "startup_timeout": null
+      },
+      "selected_suite": {
+        "log": "logs/s2-selected-pnpm.txt",
+        "exit": 1,
+        "wall_ms": 58795,
+        "duration_s": 56.38,
+        "vitest_files": "4 failed | 37 passed (41)",
+        "failed_tests": 125,
+        "startup_timeout": "test/faker.spec.ts > faker > should not log anything on startup"
+      },
+      "failed_left_out": [],
+      "safe": true
+    },
+    {
+      "id": 3,
+      "tag": "eval-s3-pre-symbol",
+      "commit": "a30fd17b10a8fbefad926b684b3c8a3dbcaf8aaf",
+      "parent": "73afc25320da7ee0afa45cbd257d8950d4a02f89",
+      "change": "comment on line 2, before first symbol at L6",
+      "fallback": "symbolsOnLines returns null; both versions seed the whole file",
+      "report_names_fallback": false,
+      "fallback_shown_by": "all 42 after-version chains end at the file and none use contains",
+      "mode": "selective",
+      "selected": 42,
+      "total": 56,
+      "rules": { "graph-seed": 1 },
+      "chain_end_both_versions": "src/modules/helpers/_luhn-check.ts",
+      "full_suite": {
+        "log": "logs/s3-full-suite.txt",
+        "exit": 0,
+        "wall_ms": 73558,
+        "duration_s": 70.24,
+        "test_files": "57 passed (57)",
+        "tests": "56578 passed | 490 expected fail | 696 skipped (57764)"
+      },
+      "selected_suite": {
+        "log": "logs/s3-selected-pnpm.txt",
+        "exit": 0,
+        "wall_ms": 52335,
+        "duration_s": 50.01,
+        "test_files": "41 passed (41)",
+        "tests": "54189 passed | 490 expected fail | 696 skipped (55375)",
+        "note": "integration/modules/image.spec.ts is selected but excluded by vitest.config.ts"
+      },
+      "failed_left_out": [],
+      "safe": true
+    }
+  ],
+  "timings_ms": {
+    "note": "index is log stamp from 'indexando o head' to 'wrote graph.json'. select is from that write to 'relatorios em' and includes printing the JSON report. total is the PowerShell stopwatch around the bash process. Three cold rounds. Test execution is one shared run per scenario.",
+    "scenario_1": {
+      "before": {
+        "index": [48681, 48766, 48381],
+        "select": [1755, 1529, 1492],
+        "total": [52487, 52000, 51584]
+      },
+      "after": {
+        "index": [48517, 55132, 49450],
+        "select": [1608, 1836, 1843],
+        "total": [51774, 58718, 52862]
+      }
+    },
+    "scenario_2": {
+      "before": {
+        "index": [50586, 53062, 50034],
+        "select": [1709, 1620, 1665],
+        "total": [54501, 56559, 53330]
+      },
+      "after": {
+        "index": [49334, 52303, 49387],
+        "select": [1790, 1789, 1810],
+        "total": [52977, 55942, 52981]
+      }
+    },
+    "scenario_3": {
+      "before": {
+        "index": [47859, 46948, 47601],
+        "select": [1221, 1523, 1539],
+        "total": [51590, 49983, 50858]
+      },
+      "after": {
+        "index": [42536, 47990, 50895],
+        "select": [1529, 1603, 1911],
+        "total": [45207, 51369, 54564]
+      }
+    },
+    "median": {
+      "scenario_1": {
+        "before": { "index": 48681, "select": 1529, "total": 52000 },
+        "after": { "index": 49450, "select": 1836, "total": 52862 }
+      },
+      "scenario_2": {
+        "before": { "index": 50586, "select": 1665, "total": 54501 },
+        "after": { "index": 49387, "select": 1790, "total": 52981 }
+      },
+      "scenario_3": {
+        "before": { "index": 47601, "select": 1523, "total": 50858 },
+        "after": { "index": 47990, "select": 1603, "total": 51369 }
+      }
+    }
+  },
+  "contains": {
+    "default_relations_modified": false,
+    "removal_executed": false,
+    "cancels_granularity_on_this_file": true,
+    "would_false_negative_measured_bugs_from_graph_walk": false
+  },
+  "conclusion": {
+    "selected_fewer_tests": false,
+    "set_changed": false,
+    "explanation_changed_in_scenarios_1_and_2": true,
+    "failed_test_left_unselected": false,
+    "contains_cancelled_granularity": true,
+    "hunk_cost_relevant": false,
+    "confirms_internal_demos": true,
+    "decision": "keep bda3904",
+    "next_hypothesis_not_implemented": "stop following reverse contains from a seeded symbol to its file, then remeasure the luhnCheck bug"
+  }
+}

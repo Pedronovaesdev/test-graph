@@ -1,0 +1,69 @@
+{
+  "title": "Validação da seleção por símbolo",
+  "commit": "bda39042281b43b557e7005fe7c7bea98d5e4103",
+  "parent": "45698b99560eb2f9ea208b1de43695816bb85606",
+  "recommendation": "manter",
+  "critical_regressions": [],
+  "answers": {
+    "reduced_overselection": false,
+    "false_negatives": false,
+    "negatively_impacted_demos": [],
+    "negative_impact": "nenhum nas demos executadas; o conjunto de testes permaneceu igual e as falhas da suíte completa continuaram dentro dos testes selecionados",
+    "action": "manter",
+    "cause_of_no_reduction": "selector/src/graph.ts DEFAULT_RELATIONS inclui contains; o graphify também grava imports_from do teste para o arquivo. A busca reversa sobe do símbolo ao arquivo e alcança todo importador do arquivo.",
+    "smallest_change_if_reduction_is_required": "Em reverseReach, não seguir contains do símbolo semeado até o nó do arquivo. Isso não corrige uma regressão observada; mudaria o comportamento e precisaria de nova prova de segurança."
+  },
+  "unit_tests": {
+    "before": {"suites": 6, "passed": 68, "failed": 0, "time_s": 57.842, "exit": 0},
+    "after": {"suites": 6, "passed": 84, "failed": 0, "time_s": 58.693, "exit": 0}
+  },
+  "official_selection_sets_equal": ["typescript", "python", "java", "java-gradle", "spring"],
+  "test_execution": {
+    "typescript": "executado",
+    "python": "executado",
+    "java": "nao_executado_mvn_ausente",
+    "java-gradle": "executado",
+    "spring": "executado"
+  },
+  "safety_full_suite_subset": {
+    "typescript_add_bug": {
+      "failed_suites": ["tests/barrel.test.ts", "tests/cart.test.ts", "tests/math.test.ts"],
+      "passed_suites": ["tests/alias.test.ts", "tests/mock.test.ts", "tests/user.test.ts"],
+      "selected": ["tests/barrel.test.ts", "tests/cart.test.ts", "tests/math.test.ts"],
+      "safe": true
+    },
+    "python_add_bug": {
+      "failed": ["tests/cart/test_cart.py", "tests/test_barrel.py", "tests/test_math.py"],
+      "passed_count": 5,
+      "failed_count": 4,
+      "selected": ["tests/cart/test_cart.py", "tests/test_barrel.py", "tests/test_math.py"],
+      "safe": true
+    },
+    "java_gradle_add_bug": {
+      "failed": ["CartTest.sumsItems", "CheckoutTest.sendsTotalThroughNotifier", "DiscountCartTest.appliesDiscount", "MathUtilsTest.adds"],
+      "passed_unselected": ["MoneyTest.formatsCents"],
+      "safe": true
+    },
+    "spring_price_bug": {
+      "failed": ["ApiIntegrationTest", "DefaultPriceServiceTest"],
+      "passed_unselected": ["CartServiceTest"],
+      "passed_selected": ["CartControllerWebTest", "GreetingServiceTest"],
+      "safe": true
+    }
+  },
+  "granularity_real_graphify_sets_equal": true,
+  "granularity_missed_failures": [],
+  "synthetic_boundaries": {
+    "H-line9": {"before": ["inner", "outer"], "after": ["outer"]},
+    "H-line10": {"before": ["inner", "outer"], "after": ["inner"]},
+    "H-line18": {"before": ["inner", "outer"], "after": ["inner"]},
+    "H-line19": {"before": ["inner", "outer"], "after": ["outer"]},
+    "H-line41": {"before": ["inner", "outer"], "after": ["inner", "outer"]},
+    "G-missing-location": {"before": ["inner", "outer"], "after": ["inner", "outer"]}
+  },
+  "select_phase_ms_case_A": {
+    "before": [362, 338, 353],
+    "after": [424, 493, 403]
+  },
+  "logs": "C:/Users/gabri/Residencia IV/tgs-eval-logs"
+}
