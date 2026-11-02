@@ -133,7 +133,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # So wheels: nenhum setup.py roda na instalacao (todas as dependencias tem wheel).
       - name: Instalar o indexador AST (graphify)
-        run: pip install -r requirements.txt
+        run: pip install --only-binary ':all:' -r requirements.txt
       - name: Casos do hook
         run: bash demo/hook-test.sh

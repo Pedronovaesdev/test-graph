@@ -136,6 +136,7 @@ if [[ "$mode" == "full" ]]; then
       log "a mudanca pede a suite completa e TGS_HOOK_ON_FULL=block: push bloqueado"
       log "rode a suite e use 'git push --no-verify', ou mude TGS_HOOK_ON_FULL"
       exit 1 ;;
+    *) ;; # run: segue para rodar a suite completa abaixo
   esac
 fi
 

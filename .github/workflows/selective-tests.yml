@@ -96,6 +96,7 @@ jobs:
             java) mvn -q test ;;
             java-gradle) ./gradlew test --console=plain -q ;;
             python) python -m pytest -q ;;
+            *) echo "::error::linguagem sem suite completa: ${{ matrix.lang }}"; exit 1 ;;
           esac
           echo "$(( $(date +%s) - start ))" > "$RUNNER_TEMP/seconds"
       - name: Guardar tempo
