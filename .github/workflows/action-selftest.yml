@@ -76,6 +76,21 @@ jobs:
           echo "mode=$MODE"
           [ "$MODE" = "skipped" ] || { echo "::error::esperado mode=skipped na mesma arvore, veio '$MODE'"; exit 1; }
 
+      # Base fora do clone: sem como saber o que mudou, tem que ir para a suite completa.
+      - id: tgs-no-base
+        if: matrix.demo == 'typescript'
+        uses: ./
+        with:
+          project: ${{ matrix.project }}
+          base: "1234567890abcdef1234567890abcdef12345678"
+      - name: Conferir que sem base roda a suite completa
+        if: matrix.demo == 'typescript'
+        env:
+          MODE: ${{ steps.tgs-no-base.outputs.mode }}
+        run: |
+          echo "mode=$MODE"
+          [ "$MODE" = "fail-safe" ] || { echo "::error::esperado mode=fail-safe sem base, veio '$MODE'"; exit 1; }
+
   # Testa o template do GitLab CI (ci/gitlab/run.sh) com as variaveis que o
   # GitLab define num merge request. O include e o clone ficam de fora: so o
   # GitLab executa o .yml do template.
@@ -107,6 +122,16 @@ jobs:
             exit 1
           }
           test -d .tgs-cache/graphify-out || { echo "::error::cache do indexador nao foi salvo"; exit 1; }
+
+      - name: run.sh num push de branch nova (sem base) roda a suite completa
+        env:
+          CI_COMMIT_BEFORE_SHA: "0000000000000000000000000000000000000000"
+          TGS_PROJECT: demo/ts-project
+        run: |
+          bash ci/gitlab/run.sh
+          grep -q '^TGS_MODE=fail-safe$' tgs-report/tgs.env || {
+            echo "::error::esperado TGS_MODE=fail-safe sem base"; cat tgs-report/tgs.env; exit 1
+          }
 
       - name: run.sh duas vezes na mesma arvore (TGS_SKIP_TESTED_TREE)
         env:

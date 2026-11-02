@@ -182,7 +182,7 @@ deixa a `main` ler o cache de um PR, então o merge na `main` ainda roda de novo
 
 | Entrada | Padrão | Descrição |
 |---|---|---|
-| `base` | automático | Commit de comparação. Vazio = base do PR (`pull_request`) ou commit anterior ao push |
+| `base` | automático | Commit de comparação. Vazio = base do PR (`pull_request`), base do grupo (`merge_group`) ou commit anterior ao push. Sem base disponível (push de branch nova, checkout raso), roda a suíte completa |
 | `head` | `HEAD` | Commit analisado |
 | `project` | `.` | Pasta do projeto dentro do repositório (monorepo) |
 | `lang` | detecta | `typescript`, `angular`, `vitest`, `java`, `java-gradle`, `python`, ou o caminho de um `.yml` do projeto |
@@ -358,6 +358,7 @@ argumentos e o stdin do git: `bash <test-graph>/selector/bin/pre-push.sh "$@"`.
 | `--dry-run` | — | Só seleciona e explica; não executa testes |
 | `--format` | `text` | Formato impresso no stdout (`text`, `json`, `md`). Os três ficam em `--out-dir` |
 | `--out-dir` | `<projeto>/.selector-out` | Pasta dos relatórios |
+| `--full-suite MOTIVO` | — | Pula a seleção e roda a suíte completa, registrando o motivo (dispensa `--base`). Usado pela Action e pelo template do GitLab quando não há commit de comparação |
 
 **Variáveis de ambiente:** `GRAPHIFY` (executável do indexador), `NODE`,
 `FULL_SUITE_COMMAND` (sobrescreve o comando da suíte completa), `GRAPHIFY_FAST=0`

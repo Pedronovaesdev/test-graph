@@ -9,7 +9,8 @@
 # Variaveis (todas opcionais):
 #   TGS_PROJECT        pasta do projeto no repositorio (padrao: .)
 #   TGS_LANG           typescript, angular, vitest, java, java-gradle, python ou um .yml
-#   TGS_BASE           commit de comparacao (padrao: base do MR ou commit anterior ao push)
+#   TGS_BASE           commit de comparacao (padrao: base do MR ou commit anterior ao push;
+#                      sem base disponivel, roda a suite completa)
 #   TGS_HEAD           commit analisado (padrao: HEAD)
 #   TGS_DRY_RUN        true = so seleciona e explica, sem rodar os testes
 #   TGS_SKIP_TESTED_TREE  true = pula tudo se este conteudo (tree do git) ja
@@ -95,22 +96,22 @@ fi
 if [[ -n "$base" ]] && ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
   git fetch --quiet origin "$base" 2>/dev/null || true
 fi
-if [[ -z "$base" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-  if git rev-parse --verify --quiet HEAD~1 >/dev/null; then
-    if [[ -z "$base" ]]; then
-      log "aviso: sem base (push de branch nova?); comparando com HEAD~1."
-    else
-      log "aviso: base '$base' indisponivel; comparando com HEAD~1. Use GIT_DEPTH: 0."
-    fi
-    base="$(git rev-parse HEAD~1)"
-  else
-    log "aviso: sem historico para comparar (clone raso?). Use GIT_DEPTH: 0."
-    base="$(git rev-parse HEAD)"
-  fi
+# Sem base confiavel nao ha como saber o que mudou: suite completa.
+# (Comparar com HEAD~1 deixaria de fora os outros commits do push.)
+full_reason=""
+if [[ -z "$base" ]]; then
+  full_reason="sem commit de comparacao (push de branch nova?)"
+elif ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+  full_reason="commit base $base fora do clone (use GIT_DEPTH: 0)"
 fi
 
 # --- selecao e execucao ----------------------------------------------------
-args=(--base "$base" --head "$HEAD_REF" --project "$PROJECT" --out-dir "$REPORT_DIR")
+if [[ -n "$full_reason" ]]; then
+  log "aviso: $full_reason: rodando a suite completa"
+  args=(--full-suite "$full_reason" --project "$PROJECT" --out-dir "$REPORT_DIR")
+else
+  args=(--base "$base" --head "$HEAD_REF" --project "$PROJECT" --out-dir "$REPORT_DIR")
+fi
 [[ -n "${TGS_LANG:-}" ]] && args+=(--lang "$TGS_LANG")
 [[ "${TGS_DRY_RUN:-false}" == "true" ]] && args+=(--dry-run)
 

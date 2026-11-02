@@ -4,6 +4,7 @@
 #   ./select-tests.sh --base origin/main --head HEAD [--project DIR]
 #                     [--lang typescript|vitest|java|java-gradle|python] [--dry-run] [--format text|json|md]
 #                     [--out-dir DIR]
+#   ./select-tests.sh --full-suite MOTIVO [--project DIR] [--lang ...]
 #
 # Passos: valida dependencias -> gera o grafo do head (e do base, se houver
 # remocao/renomeacao) com o indexador AST -> chama o seletor -> imprime a
@@ -46,8 +47,11 @@ log() { printf '[select-tests] %s\n' "$*" >&2; }
 die() { log "erro: $*"; exit 2; }
 
 usage() {
-  sed -n '2,8p' "$SOURCE" | sed 's/^# \{0,1\}//'
+  sed -n '2,9p' "$SOURCE" | sed 's/^# \{0,1\}//'
 }
+# --full-suite: quem chama nao tem base confiavel (push de branch nova, clone
+# raso): pula a selecao e roda a suite completa, registrando o motivo.
+FULL_REASON=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -58,12 +62,13 @@ while [[ $# -gt 0 ]]; do
     --format) FORMAT="${2:?--format precisa de valor}"; shift 2 ;;
     --out-dir) OUT_DIR="${2:?--out-dir precisa de valor}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --full-suite) FULL_REASON="${2:?--full-suite precisa de um motivo}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "argumento desconhecido: $1" ;;
   esac
 done
 
-[[ -n "$BASE" ]] || { usage >&2; die "faltou --base"; }
+[[ -n "$BASE" || -n "$FULL_REASON" ]] || { usage >&2; die "faltou --base"; }
 case "$FORMAT" in text|json|md) ;; *) die "--format invalido: $FORMAT" ;; esac
 
 # --- 1. dependencias minimas (sem elas nem a suite completa roda) ---------
@@ -148,6 +153,7 @@ cleanup() {
   done
 }
 trap cleanup EXIT
+[[ -z "$FULL_REASON" ]] || fail_safe "$FULL_REASON"
 
 # Python do ambiente do graphify (mesmo diretorio do executavel), para rodar o
 # graphify-fast.py. Vazio = chama o graphify direto. GRAPHIFY_FAST=0 desliga.
