@@ -13,7 +13,12 @@ export const vitest = loadLanguage("vitest");
  * Nos com `/` no id viram nos de arquivo (label = nome do arquivo); os demais
  * sao simbolos `arquivo#simbolo`, cujo source_file e a parte antes de `#`.
  */
-export function graph(edges: string[], name = "head", extraFiles: string[] = []): DependencyGraph {
+export function graph(
+  edges: string[],
+  name = "head",
+  extraFiles: string[] = [],
+  locations: Record<string, string> = {},
+): DependencyGraph {
   const nodes = new Map<string, Record<string, unknown>>();
   const addNode = (id: string) => {
     if (nodes.has(id)) return;
@@ -27,7 +32,7 @@ export function graph(edges: string[], name = "head", extraFiles: string[] = [])
       id,
       label: symbol ?? file.split("/").pop(),
       source_file: file,
-      source_location: "L1",
+      source_location: locations[id] ?? "L1",
     });
   };
   const raw = edges.map((line, i) => {
@@ -40,6 +45,8 @@ export function graph(edges: string[], name = "head", extraFiles: string[] = [])
   return new DependencyGraph([...nodes.values()], raw, name);
 }
 
-export function change(status: Change["status"], file: string, oldFile: string | null = null): Change {
-  return { status, repoPath: file, path: file, oldRepoPath: oldFile, oldPath: oldFile };
+export function change(status: Change["status"], file: string, oldFile: string | null = null, hunks?: Change["hunks"]): Change {
+  const result: Change = { status, repoPath: file, path: file, oldRepoPath: oldFile, oldPath: oldFile };
+  if (hunks !== undefined) result.hunks = hunks;
+  return result;
 }

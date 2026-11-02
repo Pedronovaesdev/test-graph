@@ -42,6 +42,22 @@ describe("Angular: template e estilo pertencem ao componente", () => {
     expect(s.hits.map((h) => h.rule)).toEqual(["no-dependents"]);
   });
 
+  it("linhas do template nao filtram os simbolos do componente", () => {
+    const file = `${C}/button/button.component.ts`;
+    const open = `${file}#open()`;
+    const close = `${file}#close()`;
+    const specs = [`${C}/a.spec.ts`, `${C}/b.spec.ts`];
+    const owned = graph(
+      [`${specs[0]} imports ${open}`, `${specs[1]} imports ${close}`, `${file} contains ${open}`, `${file} contains ${close}`],
+      "head",
+      [],
+      { [open]: "L10", [close]: "L40" },
+    );
+    const hunk = { oldStart: 10, oldCount: 1, newStart: 10, newCount: 1 };
+    const s = selectTests([change("M", `${C}/button/button.component.html`, null, [hunk])], angular, specs, owned);
+    expect(selectedTests(s)).toEqual(specs);
+  });
+
   it("na configuracao typescript, sem owner_files, template roda a suite completa", () => {
     const s = selectTests([change("M", `${C}/button/button.component.html`)], loadLanguage("typescript"), tests, g());
     expect(s.mode).toBe("full");

@@ -1,3 +1,4 @@
+import type { Hunk } from "../src/diff";
 import { selectTests, selectedTests } from "../src/engine";
 import { buildReport, renderJson, renderMarkdown, renderText } from "../src/report";
 import { change, graph, java, javaGradle, python, ts, vitest } from "./helpers";
@@ -110,6 +111,90 @@ describe("selectTests", () => {
     ]);
     const s = selectTests([change("M", "src/main/java/Email.java")], java, ["src/test/java/CheckoutTest.java"], g);
     expect(selectedTests(s)).toEqual(["src/test/java/CheckoutTest.java"]);
+  });
+});
+
+describe("semente por simbolo", () => {
+  const file = "src/utils/math.ts";
+  const add = `${file}#add()`;
+  const sub = `${file}#subtract()`;
+  const mul = `${file}#multiply()`;
+  const locations = { [add]: "L10", [sub]: "L20", [mul]: "L30" };
+  const edges = [
+    `${file} contains ${add}`,
+    `${file} contains ${sub}`,
+    `${file} contains ${mul}`,
+    "tests/add.test.ts imports src/utils/math.ts#add()",
+    "tests/sub.test.ts imports src/utils/math.ts#subtract()",
+    "tests/mul.test.ts imports src/utils/math.ts#multiply()",
+    "tests/math.test.ts imports_from src/utils/math.ts",
+    "src/services/cart.ts calls src/utils/math.ts#add()",
+    "tests/cart.test.ts imports_from src/services/cart.ts",
+  ];
+  const tests = ["tests/add.test.ts", "tests/cart.test.ts", "tests/math.test.ts", "tests/mul.test.ts", "tests/sub.test.ts"];
+  const edited: Hunk = { oldStart: 12, oldCount: 3, newStart: 12, newCount: 5 };
+
+  it("so o simbolo cujas linhas mudaram vira semente", () => {
+    const s = selectTests([change("M", file, null, [edited])], ts, tests, graph(edges, "head", [], locations));
+    expect(s.mode).toBe("selective");
+    expect(selectedTests(s)).toEqual(["tests/add.test.ts", "tests/cart.test.ts", "tests/math.test.ts"]);
+    const report = buildReport(s, { base: "b", head: "h", lang: ts });
+    const addTest = report.tests.find((t) => t.test === "tests/add.test.ts")!;
+    expect(Object.keys(addTest).sort()).toEqual(["chain", "explanation", "graph", "reason", "scope", "seed_file", "test"]);
+    expect(addTest.seed_file).toBe(file);
+    expect(addTest.explanation).toBe("tests/add.test.ts --importa--> add() [alterado em src/utils/math.ts]");
+    expect(report.schema_version).toBe(1);
+  });
+
+  it("sem hunks semeia o arquivo inteiro", () => {
+    const s = selectTests([change("M", file)], ts, tests, graph(edges, "head", [], locations));
+    expect(selectedTests(s)).toEqual(tests);
+  });
+
+  it("hunk que cobre dois simbolos semeia os dois", () => {
+    const hunks: Hunk[] = [
+      { oldStart: 12, oldCount: 1, newStart: 12, newCount: 1 },
+      { oldStart: 21, oldCount: 1, newStart: 21, newCount: 1 },
+    ];
+    const s = selectTests([change("M", file, null, hunks)], ts, tests, graph(edges, "head", [], locations));
+    expect(selectedTests(s)).toEqual(["tests/add.test.ts", "tests/cart.test.ts", "tests/math.test.ts", "tests/sub.test.ts"]);
+  });
+
+  it("cai no arquivo inteiro se a linha, a localizacao ou a remocao nao identificam o simbolo", () => {
+    const head = graph(edges, "head", [], locations);
+    expect(selectedTests(selectTests([change("M", file, null, [{ oldStart: 1, oldCount: 2, newStart: 1, newCount: 2 }])], ts, tests, head))).toEqual(tests);
+    expect(selectedTests(selectTests([change("M", file, null, [{ oldStart: 30, oldCount: 4, newStart: 29, newCount: 0 }])], ts, tests, head))).toEqual(tests);
+    const broken = { ...locations, [sub]: "sem-linha" };
+    expect(selectedTests(selectTests([change("M", file, null, [edited])], ts, tests, graph(edges, "head", [], broken)))).toEqual(tests);
+  });
+
+  it("arquivo novo ou renomeado continua semeando todos os simbolos", () => {
+    const head = graph(edges, "head", [], locations);
+    const added = selectTests([change("A", file, null, [edited])], ts, tests, head);
+    expect(added.mode).toBe("selective");
+    expect(selectedTests(added)).toEqual(tests);
+    const oldFile = "src/utils/old-math.ts";
+    const base = graph([`${oldFile} contains ${oldFile}#legacy()`], "base", [], { [`${oldFile}#legacy()`]: "L1" });
+    const renamed = selectTests([change("R", file, oldFile, [edited])], ts, tests, head, base);
+    expect(renamed.mode).toBe("selective");
+    expect(selectedTests(renamed)).toEqual(tests);
+  });
+
+  it("filtra o grafo do base pelas linhas antigas", () => {
+    const head = graph(edges, "head", [], locations);
+    const base = graph(
+      [
+        ...edges,
+        "tests/old-add.test.ts imports src/utils/math.ts#add()",
+        "tests/old-sub.test.ts imports src/utils/math.ts#subtract()",
+      ],
+      "base",
+      [],
+      locations,
+    );
+    const universe = [...tests, "tests/old-add.test.ts", "tests/old-sub.test.ts"];
+    const s = selectTests([change("M", file, null, [edited])], ts, universe, head, base);
+    expect(selectedTests(s)).toEqual(["tests/add.test.ts", "tests/cart.test.ts", "tests/math.test.ts", "tests/old-add.test.ts"]);
   });
 });
 

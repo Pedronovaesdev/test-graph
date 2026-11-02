@@ -14,12 +14,25 @@ export type ChangeStatus = "A" | "M" | "D" | "R";
  * `repoPath` e relativo a raiz do repositorio. Arquivo fora do projeto fica
  * com `path = null`.
  */
+/** Um hunk de `git diff -U0`. Contagens omitidas no header valem 1. */
+export interface Hunk {
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+}
+
 export interface Change {
   status: ChangeStatus;
   repoPath: string;
   path: string | null;
   oldRepoPath: string | null;
   oldPath: string | null;
+  /**
+   * Hunks do diff unificado. Ausente: o diff nao foi lido e a selecao
+   * semeia o arquivo inteiro. Lista vazia: nao ha hunk de conteudo.
+   */
+  hunks?: Hunk[];
 }
 
 export function compare(a: string, b: string): number {
@@ -96,9 +109,113 @@ export function parseNameStatus(output: string, prefix = ""): Change[] {
   return changes.sort((a, b) => compare(a.repoPath, b.repoPath) || compare(a.status, b.status));
 }
 
+/**
+ * Caminho `b/` de um header `diff --git`. Sem aspas, o separador e o ultimo
+ * ` b/` em que os dois lados ainda coincidem (arquivo so modificado); numa
+ * renomeacao, o ultimo ` b/` do header.
+ */
+function pathFromDiffHeader(line: string): string | null {
+  const rest = line.slice("diff --git ".length);
+  if (rest.startsWith('"')) {
+    const endA = quotedTokenEnd(rest, 0);
+    if (endA < 0) return null;
+    const bAt = rest.indexOf('"', endA);
+    if (bAt < 0) return null;
+    const endB = quotedTokenEnd(rest, bAt);
+    if (endB < 0) return null;
+    return stripAB(unescapeGit(rest.slice(bAt + 1, endB - 1)));
+  }
+  const candidates: Array<{ a: string; b: string }> = [];
+  let from = 0;
+  while (from < rest.length) {
+    const idx = rest.indexOf(" b/", from);
+    if (idx < 0) break;
+    const left = rest.slice(0, idx);
+    const right = rest.slice(idx + 1);
+    if (left.startsWith("a/") && right.startsWith("b/")) candidates.push({ a: left.slice(2), b: right.slice(2) });
+    from = idx + 1;
+  }
+  if (candidates.length === 0) return null;
+  const same = candidates.filter((c) => c.a === c.b);
+  return (same.length > 0 ? same[same.length - 1] : candidates[candidates.length - 1]).b;
+}
+
+function quotedTokenEnd(input: string, open: number): number {
+  for (let i = open + 1; i < input.length; i++) {
+    if (input[i] === "\\") {
+      i += 1;
+      continue;
+    }
+    if (input[i] === '"') return i + 1;
+  }
+  return -1;
+}
+
+function unescapeGit(body: string): string {
+  return body.replace(/\\(?:([abtnvfr"\\])|([0-7]{1,3}))/g, (_m, simple: string | undefined, octal: string | undefined) => {
+    if (octal !== undefined) return String.fromCharCode(parseInt(octal, 8));
+    const named: Record<string, string> = { a: "\u0007", b: "\b", t: "\t", n: "\n", v: "\v", f: "\f", r: "\r", '"': '"', "\\": "\\" };
+    return simple ? (named[simple] ?? simple) : _m;
+  });
+}
+
+function stripAB(p: string): string {
+  return p.startsWith("a/") || p.startsWith("b/") ? p.slice(2) : p;
+}
+
+/**
+ * Hunks de `git diff -U0`, indexados pelo caminho novo (relativo a raiz
+ * do repositorio). Sem contexto: cada linha do hunk foi de fato alterada.
+ */
+export function parseUnifiedDiff(output: string): Map<string, Hunk[]> {
+  const hunks = new Map<string, Hunk[]>();
+  let current: string | null = null;
+  for (const line of output.split(/\r?\n/)) {
+    if (line.startsWith("diff --git ")) {
+      current = pathFromDiffHeader(line);
+      if (current !== null && !hunks.has(current)) hunks.set(current, []);
+      continue;
+    }
+    const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (!header || current === null) continue;
+    const list = hunks.get(current);
+    if (!list) continue;
+    list.push({
+      oldStart: Number(header[1]),
+      oldCount: header[2] === undefined ? 1 : Number(header[2]),
+      newStart: Number(header[3]),
+      newCount: header[4] === undefined ? 1 : Number(header[4]),
+    });
+  }
+  return hunks;
+}
+
+/**
+ * Linhas alteradas num lado do hunk. `null` quando um hunk nao tem linhas
+ * nesse lado (insercao ou remocao pura): o simbolo apagado pode nao estar
+ * mais no grafo, e o fallback e o arquivo inteiro.
+ */
+export function changedLines(hunks: readonly Hunk[], side: "new" | "old"): number[] | null {
+  const lines = new Set<number>();
+  for (const hunk of hunks) {
+    const start = side === "new" ? hunk.newStart : hunk.oldStart;
+    const count = side === "new" ? hunk.newCount : hunk.oldCount;
+    if (count === 0) return null;
+    for (let i = 0; i < count; i++) lines.add(start + i);
+  }
+  if (lines.size === 0) return null;
+  return [...lines].sort((a, b) => a - b);
+}
+
 /** Arquivos alterados de `base` ate `head` (diff de tres pontos: desde o merge-base). */
 export function changedFiles(repo: string, base: string, head: string, prefix = ""): Change[] {
-  return parseNameStatus(git(repo, ["diff", "--name-status", "-z", "-M", `${base}...${head}`]), prefix);
+  const spec = `${base}...${head}`;
+  const changes = parseNameStatus(git(repo, ["diff", "--name-status", "-z", "-M", spec]), prefix);
+  const hunks = parseUnifiedDiff(git(repo, ["diff", "-U0", "--no-color", "--no-ext-diff", "-M", spec]));
+  for (const change of changes) {
+    change.hunks = hunks.get(change.repoPath) ?? (change.oldRepoPath !== null ? hunks.get(change.oldRepoPath) : undefined) ?? [];
+  }
+  return changes;
 }
 
 /** Todos os arquivos versionados no commit `rev`, relativos ao projeto. */

@@ -87,6 +87,19 @@ function normPath(p: unknown): string | null {
   return String(p).replace(/\\/g, "/").replace(/^\.\//, "");
 }
 
+/**
+ * Linha inicial de um `source_location`. `L10` e `L10:C5` dao inicio 10;
+ * `L10-L18` tambem guarda o fim. Sem o prefixo `L`, nao da para distinguir
+ * coluna de linha, e o chamador cai no arquivo inteiro.
+ */
+export function parseSourceLocation(location: string | null): { start: number; end: number | null } | null {
+  if (!location) return null;
+  const lines = [...location.matchAll(/L(\d+)/gi)].map((m) => Number(m[1]));
+  if (lines.length === 0 || lines.some((n) => n < 1)) return null;
+  if (lines.length > 1 && lines[lines.length - 1] < lines[0]) return null;
+  return { start: lines[0], end: lines.length > 1 ? lines[lines.length - 1] : null };
+}
+
 function push<T>(map: Map<string, T[]>, key: string, value: T): void {
   const list = map.get(key);
   if (list) list.push(value);
@@ -163,9 +176,39 @@ export class DependencyGraph {
     return this.byFile.has(file);
   }
 
-  /** Sementes de um arquivo: o no do arquivo e todo simbolo definido nele. */
+  /** Nos de um arquivo: o no do arquivo e todo simbolo definido nele. */
   nodesInFile(file: string): string[] {
     return [...(this.byFile.get(file) ?? [])];
+  }
+
+  /**
+   * Simbolos que cobrem cada linha alterada. `null` pede o arquivo inteiro:
+   * simbolo sem localizacao, linha antes do primeiro simbolo, ou linha fora
+   * de todo intervalo explicito.
+   *
+   * So com a linha inicial, o simbolo segue ate o proximo do mesmo arquivo
+   * (a linha fica com o maior inicio <= ela). Com fim (`L10-L18`), a linha
+   * tambem precisa cair nele; se o mais interno ja terminou, vale o de fora.
+   */
+  symbolsOnLines(file: string, lines: readonly number[]): string[] | null {
+    if (lines.length === 0) return null;
+    const fileNode = this.fileNode(file);
+    const symbols: Array<{ id: string; start: number; end: number | null }> = [];
+    for (const id of this.byFile.get(file) ?? []) {
+      if (id === fileNode) continue;
+      const loc = parseSourceLocation(this.nodes.get(id)!.sourceLocation);
+      if (!loc) return null;
+      symbols.push({ id, ...loc });
+    }
+    if (symbols.length === 0) return null;
+    const matched = new Set<string>();
+    for (const line of lines) {
+      const owners = symbols.filter((s) => s.start <= line && (s.end === null || line <= s.end));
+      if (owners.length === 0) return null;
+      const start = Math.max(...owners.map((s) => s.start));
+      for (const owner of owners) if (owner.start === start) matched.add(owner.id);
+    }
+    return matched.size > 0 ? [...matched].sort(compare) : null;
   }
 
   sourceFile(node: string): string | null {

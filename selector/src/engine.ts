@@ -1,7 +1,7 @@
 /**
  * Motor de selecao: alteracoes -> testes afetados, com o motivo de cada um.
  */
-import { compare, type Change } from "./diff";
+import { changedLines, compare, type Change } from "./diff";
 import { DEFAULT_RELATIONS, type DependencyGraph, type Step } from "./graph";
 import { companionTestFor, isTest, scopeFor, type LanguageConfig } from "./languages";
 import * as rules from "./rules";
@@ -43,6 +43,23 @@ function compareRank(a: Rank, b: Rank): number {
     if (c !== 0) return c;
   }
   return a.length - b.length;
+}
+
+/**
+ * Nos que viram semente. Sem hunks, ou quando o simbolo nao da para
+ * localizar, todos os nos do arquivo (comportamento anterior). So uma
+ * modificacao do proprio arquivo semeado e filtrada: template/estilo
+ * apontam para o componente dono, e as linhas do diff nao sao as dele.
+ * Remocao pura (`count` 0) tambem cai no arquivo inteiro.
+ */
+function seedNodes(graph: DependencyGraph, file: string, change: Change, side: "head" | "base"): string[] {
+  const all = graph.nodesInFile(file);
+  if (change.hunks === undefined || change.status !== "M") return all;
+  const changedPath = side === "head" ? change.path : (change.oldPath ?? change.path);
+  if (changedPath !== file) return all;
+  const lines = changedLines(change.hunks, side === "head" ? "new" : "old");
+  if (lines === null) return all;
+  return graph.symbolsOnLines(file, lines) ?? all;
 }
 
 /**
@@ -119,10 +136,11 @@ export function selectTests(
   sides.forEach(([graph, attr], order) => {
     if (!graph) return;
     const seeds = new Map<string, string>();
+    const side = attr === "headSeed" ? "head" : "base";
     for (const d of decisions) {
       const seedFile = d[attr];
       if (!seedFile) continue;
-      for (const node of graph.nodesInFile(seedFile)) if (!seeds.has(node)) seeds.set(node, seedFile);
+      for (const node of seedNodes(graph, seedFile, d.change, side)) if (!seeds.has(node)) seeds.set(node, seedFile);
     }
     if (seeds.size === 0) return;
     const visited = graph.reverseReach(seeds, DEFAULT_RELATIONS, lang.polymorphicRelations, (f) => f !== null && isTest(lang, f));
