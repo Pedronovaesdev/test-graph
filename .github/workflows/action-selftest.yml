@@ -7,6 +7,11 @@ on:
   push:
     branches: [main]
 
+# Push novo no mesmo PR cancela a execucao anterior; na main, cada commit roda ate o fim.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   action:
     runs-on: ubuntu-latest
@@ -44,6 +49,7 @@ jobs:
         uses: ./
         with:
           project: ${{ matrix.project }}
+          skip-tested-tree: "true"
 
       - name: Conferir as saidas da Action
         env:
@@ -53,9 +59,22 @@ jobs:
         run: |
           echo "mode=$MODE selected=$SELECTED total=$TOTAL"
           case "$MODE" in
-            selective|full|none) ;;
+            selective|full|none|skipped) ;; # skipped: re-run de uma arvore que ja passou
             *) echo "::error::saida 'mode' inesperada: '$MODE'"; exit 1 ;;
           esac
+
+      # Mesmo conteudo de novo: a arvore acabou de passar, entao tem que pular.
+      - id: tgs-again
+        uses: ./
+        with:
+          project: ${{ matrix.project }}
+          skip-tested-tree: "true"
+      - name: Conferir que a segunda execucao pulou
+        env:
+          MODE: ${{ steps.tgs-again.outputs.mode }}
+        run: |
+          echo "mode=$MODE"
+          [ "$MODE" = "skipped" ] || { echo "::error::esperado mode=skipped na mesma arvore, veio '$MODE'"; exit 1; }
 
   # Testa o template do GitLab CI (ci/gitlab/run.sh) com as variaveis que o
   # GitLab define num merge request. O include e o clone ficam de fora: so o
@@ -88,3 +107,34 @@ jobs:
             exit 1
           }
           test -d .tgs-cache/graphify-out || { echo "::error::cache do indexador nao foi salvo"; exit 1; }
+
+      - name: run.sh duas vezes na mesma arvore (TGS_SKIP_TESTED_TREE)
+        env:
+          CI_MERGE_REQUEST_DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          TGS_PROJECT: demo/ts-project
+          TGS_SKIP_TESTED_TREE: "true"
+        run: |
+          bash ci/gitlab/run.sh
+          grep -q '^TGS_MODE=skipped$' tgs-report/tgs.env && { echo "::error::primeira execucao ja pulou"; exit 1; }
+          bash ci/gitlab/run.sh
+          grep -q '^TGS_MODE=skipped$' tgs-report/tgs.env || {
+            echo "::error::esperado TGS_MODE=skipped na mesma arvore"; cat tgs-report/tgs.env; exit 1
+          }
+
+  # Hook de pre-push (selector/bin/pre-push.sh) com pushes de verdade para um
+  # remoto local: passa, bloqueia, suite completa, indexador ausente, TGS_SKIP.
+  pre-push-hook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # So wheels: nenhum setup.py roda na instalacao (todas as dependencias tem wheel).
+      - name: Instalar o indexador AST (graphify)
+        run: pip install --only-binary ':all:' -r requirements.txt
+      - name: Casos do hook
+        run: bash demo/hook-test.sh

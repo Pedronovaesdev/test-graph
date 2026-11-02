@@ -34,14 +34,18 @@ inputs:
     description: "true = guarda o cache do graphify entre execucoes (so os arquivos alterados sao relidos)."
     required: false
     default: "true"
+  skip-tested-tree:
+    description: "true = pula tudo se este conteudo (tree do git) ja passou com a mesma ferramenta, configuracao e runner. O que esta fora do repositorio (servicos, segredos) nao entra na chave."
+    required: false
+    default: "false"
 
 outputs:
   mode:
-    description: "selective, full, none ou fail-safe."
-    value: ${{ steps.run.outputs.mode }}
+    description: "selective, full, none, fail-safe ou skipped (arvore ja testada)."
+    value: ${{ steps.run.outputs.mode || steps.skipped.outputs.mode }}
   selected:
     description: "Quantos testes foram selecionados."
-    value: ${{ steps.run.outputs.selected }}
+    value: ${{ steps.run.outputs.selected || steps.skipped.outputs.selected }}
   total:
     description: "Quantos testes existem no projeto."
     value: ${{ steps.run.outputs.total }}
@@ -52,9 +56,51 @@ outputs:
 runs:
   using: "composite"
   steps:
+    # Arvore ja testada: mesmo conteudo (tree do git) que ja passou, com a
+    # mesma ferramenta, configuracao e runner. O cache guarda so a chave
+    # (lookup-only: nada e baixado). Pega re-runs e rebases sem mudanca de
+    # conteudo. O cache do GitHub nao deixa a main ler o de um PR.
+    - name: Chave da arvore testada
+      id: tree
+      if: inputs.skip-tested-tree == 'true' && inputs.dry-run != 'true'
+      shell: bash
+      env:
+        HEAD_REF: ${{ inputs.head }}
+        PROJECT: ${{ inputs.project }}
+        LANG_INPUT: ${{ inputs.lang }}
+        GRAPHIFY_VERSION: ${{ inputs.graphify-version }}
+      run: |
+        key="$(
+          {
+            git rev-parse "$HEAD_REF^{tree}"
+            printf '%s\n' "$PROJECT" "$LANG_INPUT" "$GRAPHIFY_VERSION" "${ImageOS:-}" "${ImageVersion:-}" "$(node --version 2>/dev/null || true)"
+            cat "$GITHUB_ACTION_PATH/selector/dist/cli.js" "$GITHUB_ACTION_PATH"/selector/languages/*.yml
+          } | git hash-object --stdin
+        )"
+        echo "key=tgs-tested-${{ runner.os }}-$key" >> "$GITHUB_OUTPUT"
+
+    - name: Procurar a arvore entre as ja testadas
+      id: tested
+      if: steps.tree.outputs.key != ''
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/tgs-tested
+        key: ${{ steps.tree.outputs.key }}
+        lookup-only: true
+
+    - name: Arvore ja testada
+      id: skipped
+      if: steps.tested.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        echo "::notice::Este conteudo ja passou nos testes (${{ steps.tree.outputs.key }}): nada a rodar."
+        printf '## Selecao de testes\n\n**Arvore ja testada com sucesso**: testes pulados.\n' >> "$GITHUB_STEP_SUMMARY"
+        printf 'mode=skipped\nselected=0\n' >> "$GITHUB_OUTPUT"
+
     # O graphify vai num venv proprio: nao mexe no Python do projeto e evita o
     # bloqueio de "pip install" global do Ubuntu 24.04 (PEP 668).
     - name: Instalar o indexador AST (graphify)
+      if: steps.skipped.outcome != 'success'
       shell: bash
       env:
         GRAPHIFY_VERSION: ${{ inputs.graphify-version }}
@@ -67,6 +113,7 @@ runs:
     # dependencias embutidas): nada de npm ci nem build aqui. Usa o Node que ja
     # estiver no runner (nao troca a versao do projeto).
     - name: Conferir o Node
+      if: steps.skipped.outcome != 'success'
       shell: bash
       run: |
         command -v node >/dev/null || { echo "::error::Node.js nao encontrado. Adicione actions/setup-node antes desta Action."; exit 2; }
@@ -77,7 +124,7 @@ runs:
     # reaproveitada. A chave muda a cada commit, e restore-keys pega o cache
     # mais recente do mesmo projeto.
     - name: Cache do indexador
-      if: inputs.cache == 'true'
+      if: inputs.cache == 'true' && steps.skipped.outcome != 'success'
       uses: actions/cache@v4
       with:
         path: ${{ inputs.project }}/graphify-out
@@ -87,6 +134,7 @@ runs:
 
     - name: Definir a base da comparacao
       id: base
+      if: steps.skipped.outcome != 'success'
       shell: bash
       env:
         INPUT_BASE: ${{ inputs.base }}
@@ -115,6 +163,7 @@ runs:
 
     - name: Testes seletivos
       id: run
+      if: steps.skipped.outcome != 'success'
       shell: bash
       env:
         TGS: ${{ github.action_path }}/selector/bin/select-tests.sh
@@ -148,3 +197,17 @@ runs:
           echo "mode=fail-safe" >> "$GITHUB_OUTPUT"
         fi
         exit $code
+
+    # So depois de testes que passaram de verdade (nao em --dry-run).
+    - name: Marcar a arvore como testada
+      if: success() && steps.tree.outputs.key != '' && steps.skipped.outcome != 'success'
+      shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/tgs-tested"
+        echo "${{ steps.tree.outputs.key }}" > "$RUNNER_TEMP/tgs-tested/key"
+    - name: Guardar a arvore testada
+      if: success() && steps.tree.outputs.key != '' && steps.skipped.outcome != 'success'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/tgs-tested
+        key: ${{ steps.tree.outputs.key }}

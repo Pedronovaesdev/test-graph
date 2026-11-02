@@ -12,6 +12,8 @@
 #   TGS_BASE           commit de comparacao (padrao: base do MR ou commit anterior ao push)
 #   TGS_HEAD           commit analisado (padrao: HEAD)
 #   TGS_DRY_RUN        true = so seleciona e explica, sem rodar os testes
+#   TGS_SKIP_TESTED_TREE  true = pula tudo se este conteudo (tree do git) ja
+#                      passou com a mesma ferramenta, configuracao e imagem
 #   GRAPHIFY_VERSION   versao do indexador (padrao: 0.9.90)
 #   GRAPHIFY           executavel do graphify ja instalado (pula a instalacao)
 #
@@ -19,6 +21,7 @@
 #   report.txt, report.json, report.md   o relatorio do seletor
 #   selected-tests.txt, command.txt      os testes escolhidos e o comando
 #   tgs.env                             TGS_MODE, TGS_SELECTED, TGS_TOTAL (dotenv)
+#                                       TGS_MODE=skipped: arvore ja testada
 
 set -euo pipefail
 
@@ -34,6 +37,30 @@ log() { printf '[test-graph-selector] %s\n' "$*" >&2; }
 
 rm -rf "$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
+
+# --- arvore ja testada -----------------------------------------------------
+# Mesmo conteudo (tree do git) que ja passou, com a mesma ferramenta,
+# configuracao e imagem: nada mudou para os testes, entao nao roda de novo.
+# Pega re-runs, rebases sem mudanca de conteudo e pipelines duplicadas. O que
+# esta fora do repositorio (servicos, segredos) nao entra na chave: por isso e
+# opcional. A lista fica no cache do job, em .tgs-cache/tested-trees.txt.
+TESTED="$CACHE_DIR/tested-trees.txt"
+tree_key=""
+if [[ "${TGS_SKIP_TESTED_TREE:-false}" == "true" && "${TGS_DRY_RUN:-false}" != "true" ]]; then
+  tree_key="$(
+    {
+      git rev-parse "$HEAD_REF^{tree}"
+      printf '%s\n' "$PROJECT" "${TGS_LANG:-}" "$GRAPHIFY_VERSION" "${CI_JOB_IMAGE:-}"
+      cat "$TOOL_DIR/selector/dist/cli.js" "$TOOL_DIR"/selector/languages/*.yml
+    } | git hash-object --stdin
+  )"
+  if [[ -f "$TESTED" ]] && grep -qxF "$tree_key" "$TESTED"; then
+    log "arvore $(git rev-parse --short "$HEAD_REF^{tree}") ja testada com sucesso: nada a rodar"
+    printf 'Arvore ja testada com sucesso (chave %s): testes pulados.\n' "$tree_key" > "$REPORT_DIR/report.txt"
+    printf 'TGS_MODE=skipped\nTGS_SELECTED=0\n' > "$REPORT_DIR/tgs.env"
+    exit 0
+  fi
+fi
 
 # --- graphify num venv proprio (nao mexe no Python do projeto) -------------
 if [[ -z "${GRAPHIFY:-}" ]]; then
@@ -104,9 +131,15 @@ else
 fi
 
 if [[ -d "$PROJECT/graphify-out" ]]; then
-  rm -rf "$CACHE_DIR"
+  rm -rf "$CACHE_DIR/graphify-out"
   mkdir -p "$CACHE_DIR"
   cp -a "$PROJECT/graphify-out" "$CACHE_DIR/graphify-out"
+fi
+
+if [[ -n "$tree_key" && "$code" -eq 0 ]]; then
+  mkdir -p "$CACHE_DIR"
+  echo "$tree_key" >> "$TESTED"
+  tail -n 500 "$TESTED" > "$TESTED.tmp" && mv -f "$TESTED.tmp" "$TESTED"
 fi
 
 exit $code

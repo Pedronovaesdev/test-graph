@@ -18,6 +18,10 @@
 # Nao sobrescreva `script:`; dependencias do projeto vao em `before_script:`.
 
 .test-graph-selector:
+  # Um commit novo na mesma branch cancela este job se ele ainda estiver
+  # rodando (auto-cancel do GitLab). Para nunca cancelar na branch padrao,
+  # veja o README: rules com `interruptible: false`.
+  interruptible: true
   variables:
     GIT_DEPTH: "0" # sem o historico completo o git diff base...head falha
     TGS_VERSION: "v1"
@@ -26,6 +30,7 @@
     TGS_LANG: ""
     TGS_BASE: ""
     TGS_DRY_RUN: "false"
+    TGS_SKIP_TESTED_TREE: "false" # true = pula se este conteudo ja passou (ver run.sh)
     GRAPHIFY_VERSION: "0.9.90"
   cache:
     # O run.sh copia <projeto>/graphify-out para .tgs-cache/ e de volta.
