@@ -132,8 +132,8 @@ export function buildReport(selection: Selection, ctx: ReportContext): JsonRepor
 function headline(r: JsonReport): string {
   const { selected, total, saved_percent } = r.summary;
   if (r.mode === "full") return `SUITE COMPLETA: ${total} de ${total} testes (regra de seguranca disparada)`;
-  if (r.mode === "none") return `NENHUM TESTE AFETADO: 0 de ${total} testes (${saved_percent}% economizado)`;
-  return `SELETIVO: ${selected} de ${total} testes (${saved_percent}% economizado)`;
+  if (r.mode === "none") return `NENHUM TESTE AFETADO: 0 de ${total} testes (${saved_percent}% menos testes selecionados)`;
+  return `SELETIVO: ${selected} de ${total} testes (${saved_percent}% menos testes selecionados)`;
 }
 
 export function renderJson(r: JsonReport): string {
