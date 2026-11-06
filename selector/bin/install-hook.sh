@@ -55,7 +55,15 @@ ours() { [[ -f "$HOOK" ]] && grep -qF "$MARKER" "$HOOK"; }
 if [[ "$UNINSTALL" -eq 1 ]]; then
   if ours; then
     rm -f "$HOOK"
-    log "hook removido: $HOOK"
+    if [[ -f "$HOOK.bak" ]]; then
+      mv "$HOOK.bak" "$HOOK"
+      log "hook do test-graph-selector removido; hook anterior restaurado: $HOOK"
+    else
+      log "hook removido: $HOOK"
+    fi
+  elif [[ ! -e "$HOOK" && -f "$HOOK.bak" ]]; then
+    mv "$HOOK.bak" "$HOOK"
+    log "hook anterior restaurado: $HOOK"
   else
     log "nenhum hook do test-graph-selector em $HOOK"
   fi
@@ -64,6 +72,7 @@ fi
 
 if [[ -f "$HOOK" ]] && ! ours; then
   [[ "$FORCE" -eq 1 ]] || die "ja existe um pre-push que nao e deste projeto: $HOOK (use --force para trocar; ou chame $BIN_DIR/pre-push.sh de dentro dele, repassando \"\$@\" e o stdin)"
+  [[ ! -e "$HOOK.bak" ]] || die "ja existe um backup em $HOOK.bak; mova-o ou restaure-o antes de usar --force"
   mv -f "$HOOK" "$HOOK.bak"
   log "hook anterior guardado em $HOOK.bak"
 fi

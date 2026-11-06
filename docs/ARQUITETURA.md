@@ -159,7 +159,7 @@ Arquivos alterados (1):
 Regras aplicadas:
   [graph-seed] src/utils/math.ts: no grafo do head
 
-SELETIVO: 3 de 6 testes (50% economizado)
+SELETIVO: 3 de 6 testes (50% menos testes selecionados)
 
 Testes selecionados e por que:
   * tests/barrel.test.ts
@@ -503,7 +503,7 @@ Um teste pode ser alcançado por vários caminhos. A função `offer` guarda só
   ```
 
 - **`buildReport`** monta o relatório estruturado: contagem (selecionados, total,
-  % economizado), arquivos alterados, regras e quantas vezes cada uma disparou,
+  % de redução na quantidade de testes selecionados), arquivos alterados, regras e quantas vezes cada uma disparou,
   testes com motivo e cadeia, e o comando final (`commandFor`).
 - Três saídas:
   - **`renderText`**: para o log do CI e o terminal;

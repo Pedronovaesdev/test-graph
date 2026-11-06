@@ -232,7 +232,7 @@ jobs:
               sel=$(jq -r '.seconds // "?"' "timing/selective-$demo.json" 2>/dev/null || echo "?")
               if [ -f "timing/report-$demo.json" ]; then
                 mode=$(jq -r .mode "timing/report-$demo.json")
-                tests=$(jq -r '"\(.summary.selected) de \(.summary.total) (\(.summary.saved_percent)% economizado)"' "timing/report-$demo.json")
+                tests=$(jq -r '"\(.summary.selected) de \(.summary.total) (\(.summary.saved_percent)% menos testes selecionados)"' "timing/report-$demo.json")
               else
                 mode="fail-safe"; tests="suite completa"
               fi

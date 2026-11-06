@@ -33,7 +33,7 @@ mesma entrada, mesma saída, byte a byte.
 
 ```text
 $ ./select-tests.sh --project demo/ts-project --base HEAD~1 --head HEAD
-SELETIVO: 3 de 6 testes (50% economizado)
+SELETIVO: 3 de 6 testes (50% menos testes selecionados)
 
 Testes selecionados e por que:
   * tests/barrel.test.ts

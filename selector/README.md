@@ -24,7 +24,7 @@ select-tests --base origin/main --head HEAD [--project DIR] \
 Exemplo de saída:
 
 ```text
-SELETIVO: 3 de 6 testes (50% economizado)
+SELETIVO: 3 de 6 testes (50% menos testes selecionados)
   * tests/cart.test.ts
       tests/cart.test.ts --importa--> src/services/cart.ts --importa--> src/utils/math.ts [alterado em src/utils/math.ts]
 ```
